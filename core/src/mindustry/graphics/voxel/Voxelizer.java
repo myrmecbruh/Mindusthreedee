@@ -15,10 +15,18 @@ public class Voxelizer{
     /** Pixels with alpha at or below this are empty. */
     public static final int alphaCutoff = 127;
 
-    /** Returns null if the model would not fit in 16-bit indices. */
+    /** Ground-based model. Returns null if the model would not fit in 16-bit indices. */
     public static VoxelModel build(int[] rgba, int w, int h){
+        return build(rgba, w, h, false);
+    }
+
+    /**
+     * @param centered if true, each column is centered on the z = 0 plane instead of standing on it (for flying units).
+     * Returns null if the model would not fit in 16-bit indices.
+     */
+    public static VoxelModel build(int[] rgba, int w, int h, boolean centered){
         int[] height = heightMap(rgba, w, h);
-        return mesh(rgba, height, w, h);
+        return mesh(rgba, height, w, h, centered);
     }
 
     /** Per-pixel column height in pixels. 0 for empty pixels. */
@@ -87,13 +95,23 @@ public class Voxelizer{
         return height;
     }
 
-    /** Greedy-meshes the columns. Faces on the ground plane are skipped, since they can never be seen. */
     public static VoxelModel mesh(int[] rgba, int[] height, int w, int h){
+        return mesh(rgba, height, w, h, false);
+    }
+
+    /**
+     * Greedy-meshes the columns. Grounded columns span z in [0, height), so their bottom faces are skipped as they can never be seen.
+     * Centered columns span [-height/2, height - height/2), so every face is meshed.
+     */
+    public static VoxelModel mesh(int[] rgba, int[] height, int w, int h, boolean centered){
         int maxHeight = 0;
         for(int v : height) maxHeight = Math.max(maxHeight, v);
         if(maxHeight == 0) return new VoxelModel(new float[0], new int[0], new short[0], 0);
 
-        int[] dim = {w, h, maxHeight};
+        //lowest z of any column; grid z index 0 sits at this height
+        int zMin = centered ? -(maxHeight / 2) : 0;
+        int zMax = centered ? maxHeight - maxHeight / 2 : maxHeight;
+        int[] dim = {w, h, zMax - zMin};
         FloatSeq pos = new FloatSeq();
         IntSeq col = new IntSeq();
         ShortSeq idx = new ShortSeq();
@@ -104,13 +122,13 @@ public class Voxelizer{
                 int[] n = new int[3];
                 n[d] = dir;
                 for(int i = 0; i < dim[d]; i++){
-                    if(dir < 0 && d == 2 && i == 0) continue; //ground contact
+                    if(!centered && dir < 0 && d == 2 && i == 0) continue; //ground contact
                     int[] mask = new int[dim[u] * dim[v]];
                     for(int a = 0; a < dim[u]; a++){
                         for(int b = 0; b < dim[v]; b++){
                             int[] p = new int[3];
                             p[d] = i; p[u] = a; p[v] = b;
-                            if(solid(p[0], p[1], p[2], w, h, height) && !solid(p[0] + n[0], p[1] + n[1], p[2] + n[2], w, h, height)){
+                            if(solid(p[0], p[1], p[2], w, h, height, zMin, centered) && !solid(p[0] + n[0], p[1] + n[1], p[2] + n[2], w, h, height, zMin, centered)){
                                 mask[a * dim[v] + b] = rgba[(h - 1 - p[1]) * w + p[0]];
                             }
                         }
@@ -143,7 +161,7 @@ public class Voxelizer{
                             for(int[] c : corners){
                                 float[] p = new float[3];
                                 p[d] = plane; p[u] = c[0]; p[v] = c[1];
-                                pos.add(p[0] - w / 2f, p[1] - h / 2f, p[2]);
+                                pos.add(p[0] - w / 2f, p[1] - h / 2f, p[2] + zMin);
                                 pos.add(n[0], n[1], n[2]);
                                 col.add(m);
                             }
@@ -157,9 +175,12 @@ public class Voxelizer{
         return new VoxelModel(pos.toArray(), col.toArray(), idx.toArray(), maxHeight);
     }
 
-    /** x,y are grid coordinates (y up); z is height. */
-    static boolean solid(int x, int y, int z, int w, int h, int[] height){
-        if(x < 0 || y < 0 || z < 0 || x >= w || y >= h) return false;
-        return z < height[(h - 1 - y) * w + x];
+    /** x,y are grid coordinates (y up); z is a grid index, where z + zMin is the actual height. */
+    static boolean solid(int x, int y, int z, int w, int h, int[] height, int zMin, boolean centered){
+        if(x < 0 || y < 0 || x >= w || y >= h) return false;
+        int hc = height[(h - 1 - y) * w + x];
+        if(hc == 0) return false;
+        int zz = z + zMin, lo = centered ? -(hc / 2) : 0;
+        return zz >= lo && zz < lo + hc;
     }
 }

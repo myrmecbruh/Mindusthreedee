@@ -108,4 +108,38 @@ public class VoxelizerTests{
             assertTrue(dot > 0, "triangle " + t / 3 + " is wound against its normal");
         }
     }
+
+    @Test
+    void centeredModelIsSymmetricAndMeshesUndersideForBothSprites() throws IOException{
+        int[] size = new int[2];
+        for(String path : new String[]{"units/dagger.png", "blocks/production/graphite-press.png"}){
+            int[] sprite = load(path, size);
+            VoxelModel ground = Voxelizer.build(sprite, size[0], size[1], false);
+            VoxelModel mid = Voxelizer.build(sprite, size[0], size[1], true);
+            assertNotNull(mid);
+
+            float minZ = Float.MAX_VALUE, maxZ = -Float.MAX_VALUE;
+            for(int i = 0; i < mid.vertexCount(); i++){
+                float z = mid.vertices[i * VoxelModel.stride + 2];
+                minZ = Math.min(minZ, z);
+                maxZ = Math.max(maxZ, z);
+            }
+            //the tallest column is centered, so the model extends equally above and below z = 0 (within a pixel for odd heights)
+            assertEquals(maxZ, -minZ, 1f, path);
+            assertTrue(minZ < 0 && maxZ > 0, path);
+            assertTrue(mid.triangleCount() > ground.triangleCount(), "underside faces are meshed for " + path);
+
+            for(int t = 0; t < mid.indices.length; t += 3){
+                float[][] p = new float[3][];
+                for(int k = 0; k < 3; k++){
+                    int s = mid.indices[t + k] * VoxelModel.stride;
+                    p[k] = new float[]{mid.vertices[s], mid.vertices[s + 1], mid.vertices[s + 2], mid.vertices[s + 3], mid.vertices[s + 4], mid.vertices[s + 5]};
+                }
+                float ax = p[1][0] - p[0][0], ay = p[1][1] - p[0][1], az = p[1][2] - p[0][2];
+                float bx = p[2][0] - p[0][0], by = p[2][1] - p[0][1], bz = p[2][2] - p[0][2];
+                float dot = (ay * bz - az * by) * p[0][3] + (az * bx - ax * bz) * p[0][4] + (ax * by - ay * bx) * p[0][5];
+                assertTrue(dot > 0, "triangle " + t / 3 + " wound against its normal in " + path);
+            }
+        }
+    }
 }
