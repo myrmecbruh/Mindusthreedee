@@ -17,6 +17,7 @@ import mindustry.game.EventType.*;
 import mindustry.gen.*;
 import mindustry.graphics.*;
 import mindustry.graphics.g3d.*;
+import mindustry.graphics.voxel.*;
 import mindustry.maps.*;
 import mindustry.type.*;
 import mindustry.world.blocks.*;
@@ -29,6 +30,7 @@ public class Renderer implements ApplicationListener{
     public static float laserOpacity = 0.5f, unitLaserOpacity = 1f, bridgeOpacity = 0.75f;
 
     public final BlockRenderer blocks = new BlockRenderer();
+    public final VoxelRenderer voxel = new VoxelRenderer();
     public final FogRenderer fog = new FogRenderer();
     public final MinimapRenderer minimap = new MinimapRenderer();
     public final OverlayRenderer overlays = new OverlayRenderer();
@@ -313,6 +315,12 @@ public class Renderer implements ApplicationListener{
 
         graphics.clear(clearColor);
         Draw.reset();
+
+        if(voxel.update()){
+            voxel.render();
+            Draw.reset();
+            return;
+        }
 
         if(animateWater || animateShields){
             effectBuffer.resize(graphics.getWidth(), graphics.getHeight());
