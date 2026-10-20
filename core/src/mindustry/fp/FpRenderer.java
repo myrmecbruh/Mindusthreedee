@@ -19,7 +19,13 @@ import mindustry.gen.*;
 import mindustry.graphics.voxel.*;
 import mindustry.type.*;
 import mindustry.world.*;
+import mindustry.entities.units.BuildPlan;
+import mindustry.input.InputHandler;
+import mindustry.input.DesktopInput;
 import mindustry.world.blocks.environment.*;
+import mindustry.world.blocks.defense.turrets.*;
+import mindustry.world.blocks.ConstructBlock;
+import mindustry.entities.*;
 
 import static mindustry.Vars.*;
 
@@ -71,6 +77,7 @@ public class FpRenderer implements Disposable{
         cam.near = 0.6f;
         cam.far = 4000f;
         chase = OS.env("FP_CHASE") != null;
+        if(chase && Strings.canParseFloat(OS.env("FP_CHASE"))) chaseDistance = Strings.parseFloat(OS.env("FP_CHASE"));
     }
 
     /** Handles input and the camera. Returns true if the world should be drawn by this renderer this frame. */
@@ -202,6 +209,8 @@ public class FpRenderer implements Disposable{
         queue.clear();
         collectWorld(px, py, unit);
         collectUnits(unit);
+        collectBullets();
+        collectPlans(unit);
         drawFlat();
 
         Core.atlas.white().texture.bind(0);
@@ -209,6 +218,7 @@ public class FpRenderer implements Disposable{
 
         Gl.disable(Gl.depthTest);
         Gl.enable(Gl.blend);
+        if(!chase) crosshair();
     }
 
     private void collectWorld(float px, float py, Unit self){
@@ -244,6 +254,26 @@ public class FpRenderer implements Disposable{
                 }
                 if(region == null || !region.found()) continue;
 
+                if(tile.build instanceof ConstructBlock.ConstructBuild cb && cb.current != null && cb.current.region != null){
+                    region = cb.current.region;
+                    quad(region, wx, wy, 0.1f, block.size * tilesize, block.size * tilesize, 0f);
+                    continue;
+                }
+                if(tile.build instanceof BaseTurret.BaseTurretBuild && block instanceof Turret t){
+                    float rotd = tile.build instanceof Turret.TurretBuild tb ? tb.rotation - 90f : 0f;
+                    float rec = tile.build instanceof Turret.TurretBuild tb2 ? tb2.curRecoil * t.recoil : 0f;
+                    float bh = block.size * tilesize * 0.3f;
+                    TextureRegion baseR = t.drawer instanceof mindustry.world.draw.DrawTurret dt ? dt.base : null;
+                    if(baseR != null && baseR.found()){
+                        VoxelModel bm = models.get(baseR, Kind.grounded, 0f, false);
+                        if(bm != null) add(bm, wx, wy, 0f, 0f); else quad(baseR, wx, wy, 0.1f, block.size * tilesize, block.size * tilesize, 0f);
+                    }
+                    VoxelModel hm = models.get(t.region, Kind.layer, 0f, false);
+                    float hx = wx + Angles.trnsx(rotd + 90f, 0f, -rec), hy = wy + Angles.trnsy(rotd + 90f, 0f, -rec);
+                    if(hm != null) add(hm, hx, hy, bh, rotd * Mathf.degRad);
+                    else quad(t.region, hx, hy, bh, block.size * tilesize, block.size * tilesize, rotd);
+                    continue;
+                }
                 float rot = tile.build != null && block.rotate ? tile.build.rotdeg() : 0f;
                 VoxelModel model = block.rotate ? null : models.get(region, Kind.grounded, 0f, false);
                 if(model == null){
@@ -308,14 +338,123 @@ public class FpRenderer implements Disposable{
         }
     }
 
+    private void ghost(Block b, int tx, int ty, int rot, boolean valid, float alpha){
+        if(b == null || b.region == null || !b.region.found()) return;
+        float ox = tx * tilesize + b.offset, oy = ty * tilesize + b.offset;
+        int a = (int)(alpha * 255);
+        float tint = valid ? Color.toFloatBits(150, 255, 160, a) : Color.toFloatBits(255, 110, 110, a);
+        tintQuad(b.region, ox, oy, 0.3f, b.size * tilesize, b.rotate ? rot * 90f - 90f : 0f, tint);
+    }
+
+    private void collectPlans(Unit self){
+        if(self == null) return;
+        for(BuildPlan p : self.plans){
+            if(p.block != null && !p.breaking) ghost(p.block, p.x, p.y, p.rotation, true, 0.55f);
+        }
+        InputHandler in = control.input;
+        for(BuildPlan p : in.selectPlans){
+            if(p.block != null && !p.breaking) ghost(p.block, p.x, p.y, p.rotation, Build.validPlace(p.block, player.team(), p.x, p.y, p.rotation), 0.6f);
+        }
+        if(in.block != null && in.isPlacing()){
+            Vec2 v = Core.input.mouseWorld();
+            int tx = World.toTile(v.x - in.block.offset), ty = World.toTile(v.y - in.block.offset);
+            ghost(in.block, tx, ty, in.rotation, Build.validPlace(in.block, player.team(), tx, ty, in.rotation), 0.7f);
+        }
+    }
+
+    private void tintQuad(TextureRegion r, float x, float y, float z, float size, float rot, float color){
+        FloatSeq seq = flat.get(r.texture);
+        if(seq == null) flat.put(r.texture, seq = new FloatSeq());
+        float cos = Mathf.cosDeg(rot), sin = Mathf.sinDeg(rot), h = size / 2f;
+        float[] cxs = {-h, h, h, -h}, cys = {-h, -h, h, h};
+        float[] us = {r.u, r.u2, r.u2, r.u}, vs = {r.v2, r.v2, r.v, r.v};
+        int[] order = {0, 1, 2, 0, 2, 3};
+        for(int i : order){
+            seq.add(x + cxs[i] * cos - cys[i] * sin, y + cxs[i] * sin + cys[i] * cos, z);
+            seq.add(0f, 0f, 1f);
+            seq.add(color);
+            seq.add(us[i], vs[i]);
+        }
+    }
+
+    private void crosshair(){
+        float w = Core.graphics.getWidth(), h = Core.graphics.getHeight();
+        Draw.proj(0, 0, w, h);
+        Draw.color(Color.white, 0.9f);
+        float cx = w / 2f, cy = h / 2f;
+        Lines.stroke(2f);
+        Lines.line(cx - 12, cy, cx - 4, cy); Lines.line(cx + 4, cy, cx + 12, cy);
+        Lines.line(cx, cy - 12, cx, cy - 4); Lines.line(cx, cy + 4, cx, cy + 12);
+        Draw.flush();
+        Draw.reset();
+    }
+
+    private void collectBullets(){
+        float rx = Mathf.sin(yaw), ry = -Mathf.cos(yaw);
+        for(Bullet b : Groups.bullet){
+            if(b.type == null || Mathf.dst(b.x, b.y, eye.x, eye.y) > radius * tilesize) continue;
+            float size = b.type instanceof mindustry.entities.bullet.BasicBulletType bb ? Math.max(1.2f, Math.min(5f, bb.height * 0.22f)) : 1.6f;
+            float z = b.type.collidesGround && !b.type.collidesAir ? 2f : (b.type.collidesAir && !b.type.collidesGround ? flightAltitude : 6f);
+            Color c = b.type instanceof mindustry.entities.bullet.BasicBulletType bb2 && bb2.frontColor != null ? bb2.frontColor : Color.white;
+            billboard(b.x, b.y, z, size, rx, ry, c.toFloatBits());
+        }
+    }
+
+    private void billboard(float x, float y, float z, float s, float rx, float ry, float color){
+        TextureRegion w = Core.atlas.white();
+        FloatSeq seq = flat.get(w.texture);
+        if(seq == null) flat.put(w.texture, seq = new FloatSeq());
+        float[][] pts = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
+        int[] order = {0, 1, 2, 0, 2, 3};
+        for(int i : order){
+            seq.add(x + rx * pts[i][0] * s, y + ry * pts[i][0] * s, z + pts[i][1] * s);
+            seq.add(0f, 0f, 1f);
+            seq.add(color);
+            seq.add(whiteU, whiteV);
+        }
+    }
+
+    private void part(TextureRegion region, boolean flip, float x, float y, float z, float rotDeg, float flatSize){
+        if(region == null || !region.found()) return;
+        VoxelModel model = models.get(region, Kind.layer, 0f, flip);
+        if(model != null) add(model, x, y, z, rotDeg * Mathf.degRad);
+    }
+
     private void collectUnits(Unit self){
         for(Unit u : Groups.unit){
-            if(u == self || u.type == null) continue;
+            if(u == self || u.type == null || u.dead) continue;
             if(Mathf.dst(u.x, u.y, eye.x, eye.y) > radius * tilesize) continue;
-            TextureRegion body = u.type.region;
-            float z0 = u.type.flying ? flightAltitude * u.elevation : 0f;
-            VoxelModel model = models.get(body, Kind.layer, 0f, false);
-            if(model != null) add(model, u.x, u.y, z0, (u.rotation - 90f) * Mathf.degRad);
+            drawUnit(u);
+        }
+    }
+
+    private void drawUnit(Unit u){
+        UnitType type = u.type;
+        float z = type.flying || u.elevation > 0.01f ? flightAltitude * u.elevation : 0f;
+        float rot = u.rotation - 90f;
+
+        if(u instanceof Mechc m){
+            float e = u.elevation, base = m.baseRotation();
+            float ext = Mathf.lerp(m.walkExtend(false), 0f, e);
+            for(int i : Mathf.signs){
+                float lx = u.x + Angles.trnsx(base, ext * i, 0f), ly = u.y + Angles.trnsy(base, ext * i, 0f);
+                part(type.legRegion, i < 0, lx, ly, z, base - 90f + 35f * i * e, 0f);
+            }
+            part(type.baseRegion, false, u.x, u.y, z, base - 90f, 0f);
+            part(type.region, false, u.x, u.y, z + 1.2f, rot, 0f);
+        }else{
+            if(type.baseRegion != null && type.baseRegion.found() && u instanceof Tankc) part(type.baseRegion, false, u.x, u.y, z, rot, 0f);
+            part(type.region, false, u.x, u.y, z, rot, 0f);
+        }
+
+        float wz = z + (u instanceof Mechc ? 2.6f : 1.4f);
+        for(WeaponMount mount : u.mounts){
+            Weapon w = mount.weapon;
+            if(w.region == null || !w.region.found()) continue;
+            float wrot = rot + (w.rotate ? mount.rotation : 0f);
+            float rx = u.x + Angles.trnsx(rot, w.x, w.y) + Angles.trnsx(wrot + 90f, 0f, -mount.recoil);
+            float ry = u.y + Angles.trnsy(rot, w.x, w.y) + Angles.trnsy(wrot + 90f, 0f, -mount.recoil);
+            part(w.region, w.flipSprite, rx, ry, wz + w.layerOffset * 4f, wrot, 0f);
         }
     }
 
