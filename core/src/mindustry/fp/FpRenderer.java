@@ -39,6 +39,15 @@ public class FpRenderer implements Disposable{
     public int radius = 40;
     public boolean chase;
     public float chaseDistance = 90f;
+    /** Height flying units hover at, in world units. Tall enough to clear the biggest buildings. */
+    public static final float flightAltitude = 44f;
+    public float lookSensitivity = 0.0028f;
+    /** Height of static walls in world units. */
+    public static final float wallHeight = 12f;
+
+    private java.awt.Robot robot;
+    private boolean robotFailed, captured;
+    private int centreX, centreY;
 
     private final Camera3D cam = new Camera3D();
     private final ModelCache models = new ModelCache();
@@ -74,9 +83,74 @@ public class FpRenderer implements Disposable{
         if(!initialised && unit != null && !unit.dead){
             initialised = true;
             yaw = unit.rotation * Mathf.degRad;
-            pitch = chase ? -0.5f : -0.12f;
+            pitch = chase ? -0.5f : -0.25f;
         }
+        look();
         return true;
+    }
+
+    /** True while the player is flying about in first person. */
+    public boolean active(){
+        return enabled && state.isGame() && !player.dead() && player.unit() != null;
+    }
+
+    public float yawDegrees(){
+        return yaw * Mathf.radDeg;
+    }
+
+    /** The point on the ground the crosshair is over. */
+    public final Vec2 aimPoint = new Vec2();
+
+    /** Mouse look. The pointer is pinned to the window centre with a Robot, since Arc's SDL binding has no pointer lock. Q and E also turn. */
+    private void look(){
+        boolean free = Core.scene.hasDialog() || Core.scene.hasField() || ui.chatfrag.shown() || !state.isGame();
+        float turn = 0.045f * Time.delta;
+        if(!free){
+            if(Core.input.keyDown(KeyCode.q)) yaw += turn;
+            if(Core.input.keyDown(KeyCode.e)) yaw -= turn;
+        }
+        if(free || robotFailed){
+            captured = false;
+            return;
+        }
+        try{
+            if(robot == null) robot = new java.awt.Robot();
+            java.awt.Point p = java.awt.MouseInfo.getPointerInfo().getLocation();
+            if(!captured){
+                //first frame: work out where the window centre is on the screen, from where the pointer is in the window
+                centreX = p.x - Core.input.mouseX() + Core.graphics.getWidth() / 2;
+                centreY = p.y - (Core.graphics.getHeight() - Core.input.mouseY()) + Core.graphics.getHeight() / 2;
+                captured = true;
+            }else{
+                yaw -= (p.x - centreX) * lookSensitivity;
+                pitch = Mathf.clamp(pitch - (p.y - centreY) * lookSensitivity, -1.45f, 1.45f);
+            }
+            robot.mouseMove(centreX, centreY);
+        }catch(Throwable t){
+            robotFailed = true;
+            Log.warn("First-person mouse look is unavailable (@); use Q and E to turn.", t.toString());
+        }
+    }
+
+    /**
+     * Repurposes the 2D camera as the aim point: it is placed so the game's own idea of the world position under the cursor is the point
+     * the crosshair hits on the ground. All of the existing aiming and building code then works unchanged.
+     */
+    private void placeAimCamera(float ex, float ey, float ez, float fx, float fy, float fz){
+        float gx, gy;
+        if(fz < -0.02f){
+            float t = ez / -fz;
+            gx = ex + fx * t; gy = ey + fy * t;
+        }else{
+            float len = Math.max(0.001f, Mathf.dst(fx, fy));
+            gx = ex + fx / len * 480f; gy = ey + fy / len * 480f;
+        }
+        aimPoint.set(gx, gy);
+        Core.camera.position.set(0f, 0f);
+        Core.camera.update();
+        Vec2 off = Core.input.mouseWorld();
+        Core.camera.position.set(gx - off.x, gy - off.y);
+        Core.camera.update();
     }
 
     private void ensureInit(){
@@ -94,7 +168,7 @@ public class FpRenderer implements Disposable{
         Unit unit = player.unit();
         float px = unit != null && !unit.dead ? unit.x : Core.camera.position.x, py = unit != null && !unit.dead ? unit.y : Core.camera.position.y;
 
-        float eyeZ = unit != null ? Math.max(5f, unit.hitSize * 0.8f) + unit.elevation * 3f : 6f;
+        float eyeZ = unit != null ? (unit.type.flying ? flightAltitude * unit.elevation : 0f) + Math.max(5f, unit.hitSize * 0.8f) : 6f;
         float cy = Mathf.cos(pitch), fx = Mathf.cos(yaw) * cy, fy = Mathf.sin(yaw) * cy, fz = Mathf.sin(pitch);
         if(chase){
             eye.set(px - fx * chaseDistance, py - fy * chaseDistance, eyeZ - fz * chaseDistance);
@@ -106,6 +180,7 @@ public class FpRenderer implements Disposable{
         cam.direction.set(fx, fy, fz).nor();
         cam.resize(Core.graphics.getWidth(), Core.graphics.getHeight());
         cam.update();
+        if(active()) placeAimCamera(eye.x, eye.y, eye.z, fx, fy, fz);
 
         Draw.flush();
         Gl.clearColor(0.55f, 0.72f, 0.88f, 1f);
@@ -155,6 +230,10 @@ public class FpRenderer implements Disposable{
 
                 Block block = tile.block();
                 if(block == Blocks.air) continue;
+                if(block.isStatic()){
+                    column(tile, block);
+                    continue;
+                }
                 if(tile.build != null && !tile.isCenter()) continue;
 
                 float wx = tile.build != null ? tile.build.x : tile.worldx();
@@ -177,12 +256,64 @@ public class FpRenderer implements Disposable{
         }
     }
 
+    /** Static walls are columns: the sprite on top, and a darkened side wherever the neighbouring tile is lower. */
+    private void column(Tile tile, Block block){
+        TextureRegion region = block.variantRegions != null && block.variantRegions.length > 0 ?
+            block.variantRegions[Mathf.randomSeed(tile.pos(), 0, block.variantRegions.length - 1)] : block.region;
+        if(region == null || !region.found()) return;
+        float x = tile.worldx(), y = tile.worldy(), h = wallHeight, r = tilesize / 2f;
+        quad(region, x, y, h, tilesize, tilesize, 0f);
+        float side = sideColor(region);
+        for(int d = 0; d < 4; d++){
+            Tile n = world.tile(tile.x + Geometry.d4x(d), tile.y + Geometry.d4y(d));
+            if(n != null && n.block().isStatic()) continue;
+            float nx = Geometry.d4x(d), ny = Geometry.d4y(d);
+            float ax = x + nx * r - ny * r, ay = y + ny * r + nx * r, bx = x + nx * r + ny * r, by = y + ny * r - nx * r;
+            sideQuad(ax, ay, bx, by, 0f, h, nx, ny, side);
+        }
+    }
+
+    private final ObjectMap<TextureRegion, Float> sideColors = new ObjectMap<>();
+
+    /** Darkened average colour of a sprite, as packed float bits. */
+    private float sideColor(TextureRegion region){
+        Float c = sideColors.get(region);
+        if(c != null) return c;
+        var pix = Core.atlas.getPixmap(region);
+        float r = 0, g = 0, b = 0;
+        int n = 0;
+        if(pix != null){
+            for(int y = 0; y < pix.height; y++) for(int x = 0; x < pix.width; x++){
+                int v = pix.get(x, y);
+                if((v & 0xff) < 128) continue;
+                r += ((v >>> 24) & 0xff); g += ((v >>> 16) & 0xff); b += ((v >>> 8) & 0xff); n++;
+            }
+        }
+        float bits = n == 0 ? Color.toFloatBits(128, 128, 128, 255) : Color.toFloatBits((int)(r / n * 0.62f), (int)(g / n * 0.62f), (int)(b / n * 0.62f), 255);
+        sideColors.put(region, bits);
+        return bits;
+    }
+
+    private void sideQuad(float ax, float ay, float bx, float by, float z0, float z1, float nx, float ny, float color){
+        TextureRegion w = Core.atlas.white();
+        FloatSeq seq = flat.get(w.texture);
+        if(seq == null) flat.put(w.texture, seq = new FloatSeq());
+        float[][] pts = {{ax, ay, z0}, {bx, by, z0}, {bx, by, z1}, {ax, ay, z1}};
+        int[] order = {0, 1, 2, 0, 2, 3};
+        for(int i : order){
+            seq.add(pts[i][0], pts[i][1], pts[i][2]);
+            seq.add(nx, ny, 0f);
+            seq.add(color);
+            seq.add(whiteU, whiteV);
+        }
+    }
+
     private void collectUnits(Unit self){
         for(Unit u : Groups.unit){
             if(u == self || u.type == null) continue;
             if(Mathf.dst(u.x, u.y, eye.x, eye.y) > radius * tilesize) continue;
             TextureRegion body = u.type.region;
-            float z0 = u.type.flying ? 2f + u.elevation * 4f : 1.5f;
+            float z0 = u.type.flying ? flightAltitude * u.elevation : 0f;
             VoxelModel model = models.get(body, Kind.layer, 0f, false);
             if(model != null) add(model, u.x, u.y, z0, (u.rotation - 90f) * Mathf.degRad);
         }

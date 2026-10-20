@@ -273,7 +273,7 @@ public class DesktopInput extends InputHandler{
         panning |= detached;
 
 
-        if(!locked){
+        if(!locked && !renderer.fp.active()){
             if(((player.dead() || state.isPaused() || detached) && !ui.chatfrag.shown()) && !scene.hasField() && !scene.hasDialog()){
                 if(input.keyDown(Binding.mouseMove)){
                     panCam = true;
@@ -991,6 +991,11 @@ public class DesktopInput extends InputHandler{
             }
         }else{
             movement.set(xa, ya).nor().scl(speed);
+            if(renderer.fp.active()){
+                //first person: forward is where the player is looking
+                float yaw = renderer.fp.yaw;
+                movement.set(Mathf.cos(yaw) * ya + Mathf.sin(yaw) * xa, Mathf.sin(yaw) * ya - Mathf.cos(yaw) * xa).nor().scl(speed * Math.min(1f, Mathf.dst(xa, ya)));
+            }
             if(Core.input.keyDown(Binding.mouseMove)){
                 movement.add(input.mouseWorld().sub(player).scl(1f / 25f * speed)).limit(speed);
             }
@@ -999,7 +1004,9 @@ public class DesktopInput extends InputHandler{
         float mouseAngle = Angles.mouseAngle(unit.x, unit.y);
         boolean aimCursor = omni && player.shooting && unit.type.hasWeapons() && unit.type.faceTarget && !boosted;
 
-        if(aimCursor){
+        if(renderer.fp.active()){
+            unit.lookAt(renderer.fp.yawDegrees());
+        }else if(aimCursor){
             unit.lookAt(mouseAngle);
         }else{
             unit.lookAt(unit.prefRotation());
