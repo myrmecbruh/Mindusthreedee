@@ -17,6 +17,7 @@ import mindustry.game.EventType.*;
 import mindustry.gen.*;
 import mindustry.graphics.*;
 import mindustry.graphics.g3d.*;
+import mindustry.fp.*;
 import mindustry.graphics.voxel.*;
 import mindustry.maps.*;
 import mindustry.type.*;
@@ -31,6 +32,9 @@ public class Renderer implements ApplicationListener{
 
     public final BlockRenderer blocks = new BlockRenderer();
     public final VoxelRenderer voxel = new VoxelRenderer();
+    {
+        TestHarness.install();
+    }
     public final FogRenderer fog = new FogRenderer();
     public final MinimapRenderer minimap = new MinimapRenderer();
     public final OverlayRenderer overlays = new OverlayRenderer();
