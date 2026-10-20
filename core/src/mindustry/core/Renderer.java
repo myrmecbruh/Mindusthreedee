@@ -31,7 +31,7 @@ public class Renderer implements ApplicationListener{
     public static float laserOpacity = 0.5f, unitLaserOpacity = 1f, bridgeOpacity = 0.75f;
 
     public final BlockRenderer blocks = new BlockRenderer();
-    public final VoxelRenderer voxel = new VoxelRenderer();
+    public final FpRenderer fp = new FpRenderer();
     {
         TestHarness.install();
     }
@@ -320,8 +320,8 @@ public class Renderer implements ApplicationListener{
         graphics.clear(clearColor);
         Draw.reset();
 
-        if(voxel.update()){
-            voxel.render();
+        if(fp.update()){
+            fp.render();
             Draw.reset();
             return;
         }
