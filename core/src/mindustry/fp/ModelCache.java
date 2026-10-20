@@ -20,6 +20,7 @@ public class ModelCache{
     }
 
     private static class Slot{
+        volatile boolean poor;
         volatile VoxelModel model;
         volatile boolean failed;
     }
@@ -55,13 +56,20 @@ public class ModelCache{
         Slot s = slot;
         pool.submit(() -> {
             try{
-                s.model = fit(rgba, w, h, kind, z0);
+                s.model = fit(rgba, w, h, kind, z0, s);
             }catch(Throwable t){
                 s.failed = true;
                 arc.util.Log.err("Failed to fit a model", t);
             }
         });
         return null;
+    }
+
+    /** True once fitting has finished and found no acceptable model: draw something simpler. */
+    public boolean poor(TextureRegion region, Kind kind, float z0, boolean flip){
+        String key = (region instanceof AtlasRegion a ? a.name : String.valueOf(System.identityHashCode(region))) + "|" + kind + "|" + (int)(z0 * 4) + "|" + flip;
+        Slot s = slots.get(key);
+        return s != null && (s.poor || s.failed);
     }
 
     static Sym detect(int[] px, int w, int h){
@@ -83,7 +91,7 @@ public class ModelCache{
         return Sym.none;
     }
 
-    static VoxelModel fit(int[] px, int w, int h, Kind kind, float z0){
+    static VoxelModel fit(int[] px, int w, int h, Kind kind, float z0, Slot slot){
         int opaque = 0, x0 = w, x1 = -1, y0 = h, y1 = -1;
         for(int y = 0; y < h; y++) for(int x = 0; x < w; x++) if((px[y * w + x] & 0xff) > 127){
             opaque++;
@@ -95,7 +103,7 @@ public class ModelCache{
         Fitter f = new Fitter(px, w, h, sym);
         f.allowOctahedra = kind != Kind.grounded;
         Result r = f.fit(budget, 6);
-        if(r.shapes.isEmpty()) return null;
+        if(r.shapes.isEmpty() || (kind == Kind.grounded && r.coverage < 0.6f)){ slot.poor = true; return null; }
         float maxH = ((x1 - x0 + 1) + (y1 - y0 + 1)) / 2f;
         return ModelBuilder.build(r.shapes, sym, kind == Kind.grounded ? ModelBuilder.Mode.grounded : ModelBuilder.Mode.layer, w, h, w / 2f, h / 2f, z0, maxH, kind == Kind.grounded);
     }

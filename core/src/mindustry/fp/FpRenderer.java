@@ -25,6 +25,7 @@ import mindustry.input.DesktopInput;
 import mindustry.world.blocks.environment.*;
 import mindustry.world.blocks.defense.turrets.*;
 import mindustry.world.blocks.ConstructBlock;
+import mindustry.world.blocks.distribution.Conveyor;
 import mindustry.entities.*;
 
 import static mindustry.Vars.*;
@@ -163,7 +164,7 @@ public class FpRenderer implements Disposable{
     private void ensureInit(){
         if(shader != null) return;
         shader = new Shader(Core.files.internal("shaders/voxel.vert"), Core.files.internal("shaders/voxel.frag"));
-        flatMesh = new Mesh(false, 6 * (radius * 2 + 1) * (radius * 2 + 1) * 3, 0,
+        flatMesh = new Mesh(false, 6 * (radius * 2 + 1) * (radius * 2 + 1) * 8, 0,
             VertexAttribute.position3, VertexAttribute.normal, VertexAttribute.color, VertexAttribute.texCoords);
         TextureRegion white = Core.atlas.white();
         whiteU = (white.u + white.u2) / 2f;
@@ -254,6 +255,16 @@ public class FpRenderer implements Disposable{
                 }
                 if(region == null || !region.found()) continue;
 
+                if(tile.build instanceof Conveyor.ConveyorBuild cv && block instanceof Conveyor cvb){
+                    int frame = cv.enabled ? (int)((Time.time * cvb.speed * 8f * cv.timeScale() * cv.efficiency) % 4) : 0;
+                    quad(cvb.regions[cv.blendbits][frame], cv.x, cv.y, 0.12f, tilesize * cv.blendsclx, tilesize * cv.blendscly, cv.rotation * 90f);
+                    for(int i = 0; i < cv.len; i++){
+                        float ix = cv.x + Angles.trnsx(cv.rotation * 90f, tilesize * cv.ys[i] - tilesize / 2f, cv.xs[i] * tilesize / 2f);
+                        float iy = cv.y + Angles.trnsy(cv.rotation * 90f, tilesize * cv.ys[i] - tilesize / 2f, cv.xs[i] * tilesize / 2f);
+                        quad(cv.ids[i].fullIcon, ix, iy, 0.5f, 4f, 4f, 0f);
+                    }
+                    continue;
+                }
                 if(tile.build instanceof ConstructBlock.ConstructBuild cb && cb.current != null && cb.current.region != null){
                     region = cb.current.region;
                     quad(region, wx, wy, 0.1f, block.size * tilesize, block.size * tilesize, 0f);
@@ -277,8 +288,12 @@ public class FpRenderer implements Disposable{
                 float rot = tile.build != null && block.rotate ? tile.build.rotdeg() : 0f;
                 VoxelModel model = block.rotate ? null : models.get(region, Kind.grounded, 0f, false);
                 if(model == null){
-                    //still being fitted, or a part that turns: draw the sprite flat
-                    quad(region, wx, wy, 0.1f, block.size * tilesize, block.size * tilesize, rot);
+                    if(!block.rotate && models.poor(region, Kind.grounded, 0f, false)){
+                        box(region, wx, wy, block.size * tilesize, Math.max(3f, block.size * tilesize * 0.45f));
+                    }else{
+                        //still being fitted, or a part that turns: draw the sprite flat
+                        quad(region, wx, wy, 0.1f, block.size * tilesize, block.size * tilesize, rot);
+                    }
                 }else{
                     add(model, wx, wy, 0f, 0f);
                 }
@@ -300,6 +315,16 @@ public class FpRenderer implements Disposable{
             float nx = Geometry.d4x(d), ny = Geometry.d4y(d);
             float ax = x + nx * r - ny * r, ay = y + ny * r + nx * r, bx = x + nx * r + ny * r, by = y + ny * r - nx * r;
             sideQuad(ax, ay, bx, by, 0f, h, nx, ny, side);
+        }
+    }
+
+    /** A plain block: the sprite on top, dark sides. */
+    private void box(TextureRegion region, float x, float y, float size, float h){
+        quad(region, x, y, h, size, size, 0f);
+        float side = sideColor(region), r = size / 2f;
+        for(int d = 0; d < 4; d++){
+            float nx = Geometry.d4x(d), ny = Geometry.d4y(d);
+            sideQuad(x + nx * r - ny * r, y + ny * r + nx * r, x + nx * r + ny * r, y + ny * r - nx * r, 0f, h, nx, ny, side);
         }
     }
 
@@ -340,10 +365,11 @@ public class FpRenderer implements Disposable{
 
     private void ghost(Block b, int tx, int ty, int rot, boolean valid, float alpha){
         if(b == null || b.region == null || !b.region.found()) return;
+        if(OS.env("FP_TEST") != null && Time.time % 120 < 1) Log.info("FP_TEST: ghost @ at @,@ valid @", b.name, tx, ty, valid);
         float ox = tx * tilesize + b.offset, oy = ty * tilesize + b.offset;
         int a = (int)(alpha * 255);
         float tint = valid ? Color.toFloatBits(150, 255, 160, a) : Color.toFloatBits(255, 110, 110, a);
-        tintQuad(b.region, ox, oy, 0.3f, b.size * tilesize, b.rotate ? rot * 90f - 90f : 0f, tint);
+        tintQuad(b.region, ox, oy, 1.0f, b.size * tilesize, b.rotate ? rot * 90f - 90f : 0f, tint);
     }
 
     private void collectPlans(Unit self){
@@ -356,7 +382,7 @@ public class FpRenderer implements Disposable{
             if(p.block != null && !p.breaking) ghost(p.block, p.x, p.y, p.rotation, Build.validPlace(p.block, player.team(), p.x, p.y, p.rotation), 0.6f);
         }
         if(in.block != null && in.isPlacing()){
-            Vec2 v = Core.input.mouseWorld();
+            Vec2 v = aimPoint;
             int tx = World.toTile(v.x - in.block.offset), ty = World.toTile(v.y - in.block.offset);
             ghost(in.block, tx, ty, in.rotation, Build.validPlace(in.block, player.team(), tx, ty, in.rotation), 0.7f);
         }
