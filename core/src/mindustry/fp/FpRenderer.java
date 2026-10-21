@@ -121,7 +121,7 @@ public class FpRenderer implements Disposable{
 
     /** Mouse look. The pointer is pinned to the window centre with a Robot, since Arc's SDL binding has no pointer lock. Q and E also turn. */
     private void look(){
-        boolean free = Core.scene.hasDialog() || Core.scene.hasField() || ui.chatfrag.shown() || !state.isGame();
+        boolean free = Core.input.keyDown(KeyCode.altLeft) || Core.scene.hasDialog() || Core.scene.hasField() || ui.chatfrag.shown() || !state.isGame();
         float turn = 0.045f * Time.delta;
         if(!free){
             if(Core.input.keyDown(KeyCode.q)) yaw += turn;

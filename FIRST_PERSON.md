@@ -5,7 +5,7 @@ A 3D, first-person view of the unmodified Mindustry simulation. The simulation, 
 - **F8** toggles first-person on and off. It is on by default on this branch.
 - **Mouse** looks around (the pointer is pinned to the window centre with `java.awt.Robot`); **Q/E** also turn. **WASD** moves relative to where you look.
 - The crosshair's hit point on the ground is the game's cursor position, so shooting, building and breaking use the existing code unchanged.
-- Dialogs, text fields and the chat release the mouse.
+- Hold **Left Alt** to free the mouse (to click the block menu); dialogs, text fields and the chat free it too.
 
 ## How it draws
 
