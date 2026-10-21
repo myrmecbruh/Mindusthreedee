@@ -97,8 +97,10 @@ public class TestHarness implements ApplicationListener{
     public void update(){
         if(!state.isGame()) return;
         counter++;
+        if(OS.env("FP_BULLETS") != null && counter > 60 && counter % 8 == 0 && player.unit() != null){ var pu = player.unit(); for(int i = -2; i <= 2; i++) mindustry.content.UnitTypes.dagger.weapons.first().bullet.create(pu, pu.team, pu.x + (float)(Math.cos(renderer.fp.yaw) * 30f - Math.sin(renderer.fp.yaw) * i * 10f), pu.y + (float)(Math.sin(renderer.fp.yaw) * 30f + Math.cos(renderer.fp.yaw) * i * 10f), renderer.fp.yawDegrees(), 1f, 0.3f); }
+        if(OS.env("FP_SHOOT") != null && player.unit() != null && counter > 60){ var pu = player.unit(); pu.isShooting = true; pu.aim(renderer.fp.aimPoint.x, renderer.fp.aimPoint.y); if(counter % 20 == 0) Log.info("FP_TEST: bullets @ mounts @ ammo @ aim @,@ pos @,@", mindustry.gen.Groups.bullet.size(), pu.mounts.length, pu.type.name, (int)pu.aimX, (int)pu.aimY, (int)pu.x, (int)pu.y); }
         if(OS.env("FP_FX") != null && counter % 50 == 0 && player.unit() != null){ var pu = player.unit(); mindustry.content.Fx.bigShockwave.at(pu.x + 60f, pu.y); mindustry.content.Fx.explosion.at(pu.x + 50f, pu.y + 10f); mindustry.content.Fx.blastExplosion.at(pu.x + 70f, pu.y - 10f); }
-        if(OS.env("FP_LOG") != null && counter % 60 == 0 && player.unit() != null) Log.info("FP_TEST: pos @,@ yaw @ pitch @ mouse @,@", (int)player.unit().x, (int)player.unit().y, renderer.fp.yaw, renderer.fp.pitch, Core.input.mouseX(), Core.input.mouseY());
+        if(OS.env("FP_LOG") != null && counter % 60 == 0 && player.unit() != null) Log.info("FP_TEST: pos @,@ yaw @ pitch @ mouse @,@ bullets " + mindustry.gen.Groups.bullet.size(), (int)player.unit().x, (int)player.unit().y, renderer.fp.yaw, renderer.fp.pitch, Core.input.mouseX(), Core.input.mouseY());
         if(!rockDone && OS.env("FP_ROCK") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             rockDone = true;
             rock();
