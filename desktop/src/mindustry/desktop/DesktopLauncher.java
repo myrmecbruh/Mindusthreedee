@@ -54,6 +54,8 @@ public class DesktopLauncher extends ClientLauncher{
                 title = "Mindustry";
                 maximized = true;
                 coreProfile = true;
+                //the first-person renderer needs a depth buffer
+                depth = 24;
                 width = 900;
                 height = 700;
 

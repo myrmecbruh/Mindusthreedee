@@ -66,7 +66,7 @@ public class FpRenderer implements Disposable{
     private Shader shader;
     private Mesh flatMesh;
     private float whiteU, whiteV;
-    private boolean initialised;
+    private boolean initialised, initialised2;
 
     private static class Draw3{
         VoxelModel model;
@@ -162,6 +162,7 @@ public class FpRenderer implements Disposable{
     }
 
     private void ensureInit(){
+        if(!initialised2){ initialised2 = true; Log.info("FP_TEST: depth bits @", Core.graphics.getBufferFormat().depth); }
         if(shader != null) return;
         shader = new Shader(Core.files.internal("shaders/voxel.vert"), Core.files.internal("shaders/voxel.frag"));
         flatMesh = new Mesh(false, 6 * (radius * 2 + 1) * (radius * 2 + 1) * 8, 0,
@@ -191,9 +192,11 @@ public class FpRenderer implements Disposable{
         if(active()) placeAimCamera(eye.x, eye.y, eye.z, fx, fy, fz);
 
         Draw.flush();
+        Gl.depthMask(true);
         Gl.clearColor(0.55f, 0.72f, 0.88f, 1f);
         Gl.clear(Gl.colorBufferBit | Gl.depthBufferBit);
         Gl.enable(Gl.depthTest);
+        Gl.depthFunc(Gl.lequal);
         Gl.depthMask(true);
         Gl.disable(Gl.cullFace);
         Gl.enable(Gl.blend);

@@ -19,7 +19,7 @@ import static mindustry.Vars.*;
 public class TestHarness implements ApplicationListener{
     private final int[] frames;
     private final String out;
-    private boolean sceneDone;
+    private boolean sceneDone, rockDone;
     private int counter = -1, next = 0;
 
     private TestHarness(int[] frames, String out){
@@ -54,6 +54,22 @@ public class TestHarness implements ApplicationListener{
         Events.on(PlayEvent.class, e -> Log.info("FP_TEST: play started"));
     }
 
+    /** Puts a chase camera close to the nearest boulder. */
+    private void rock(){
+        var u = player.unit();
+        mindustry.world.Tile best = null; float bd = 1e9f;
+        for(var t : world.tiles){
+            if(t.block().name.contains("boulder")){
+                float d = arc.math.Mathf.dst(t.worldx(), t.worldy(), u.x, u.y);
+                if(d < bd){ bd = d; best = t; }
+            }
+        }
+        if(best == null) return;
+        u.set(best.worldx() - 22f, best.worldy());
+        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.35f;
+        Log.info("FP_TEST: rock @ at @,@", best.block().name, best.x, best.y);
+    }
+
     private void scene(){
         var u = player.unit();
         if(u == null) return;
@@ -81,6 +97,10 @@ public class TestHarness implements ApplicationListener{
     public void update(){
         if(!state.isGame()) return;
         counter++;
+        if(!rockDone && OS.env("FP_ROCK") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
+            rockDone = true;
+            rock();
+        }
         if(!sceneDone && OS.env("FP_SCENE") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             sceneDone = true;
             scene();

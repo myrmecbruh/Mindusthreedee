@@ -20,6 +20,17 @@ public class FitCli{
             }
             long t = System.nanoTime();
             Fitter.Result r = new Fitter(px, w, h, sym).fit(budget, minGain);
+            int bad = 0;
+            for(Fitter.Shape sh : r.shapes){
+                float sgn = 0; boolean ok = true;
+                for(int i = 0; i < 4; i++){
+                    int j = (i + 1) & 3, k = (i + 2) & 3;
+                    float cr = (sh.poly[j*2] - sh.poly[i*2]) * (sh.poly[k*2+1] - sh.poly[j*2+1]) - (sh.poly[j*2+1] - sh.poly[i*2+1]) * (sh.poly[k*2] - sh.poly[j*2]);
+                    if(sgn == 0) sgn = Math.signum(cr); else if(Math.signum(cr) != sgn && Math.abs(cr) > 1e-3f) ok = false;
+                }
+                if(!ok) bad++;
+            }
+            System.out.println("non-convex plans: " + bad);
             System.out.printf("%s: %d shapes, %d faces, coverage %.0f%%, %d ms%n", args[a], r.shapes.size(), r.faces, r.coverage * 100, (System.nanoTime() - t) / 1000000);
         }
     }
