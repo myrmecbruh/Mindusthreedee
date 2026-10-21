@@ -1,0 +1,31 @@
+name: First-person build
+
+on:
+  push:
+    branches: [ 3d-spike ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Build the desktop jar
+        run: ./gradlew :desktop:dist --no-daemon
+      - name: Publish the jar as a release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: first-person-latest
+          name: First-person build (latest)
+          body: |
+            Download `Mindustry.jar` and run it with Java 21: `java -jar Mindustry.jar`.
+            First-person is on by default; F8 toggles it. See FIRST_PERSON.md.
+          files: desktop/build/libs/Mindustry.jar
+          prerelease: true
