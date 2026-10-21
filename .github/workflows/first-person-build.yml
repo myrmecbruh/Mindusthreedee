@@ -17,12 +17,6 @@ jobs:
           - os: windows-latest
             name: Windows
             ext: zip
-          - os: macos-latest
-            name: Mac
-            ext: zip
-          - os: ubuntu-latest
-            name: Linux
-            ext: tar.gz
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
