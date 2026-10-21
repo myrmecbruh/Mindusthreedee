@@ -266,7 +266,14 @@ public class FpRenderer implements Disposable{
                 TextureRegion[] variants = floor.variantRegions;
                 TextureRegion fr = variants != null && variants.length > 0 ?
                     variants[Mathf.randomSeed(tile.pos(), 0, variants.length - 1)] : floor.region;
-                if(fr != null) quad(fr, tile.worldx(), tile.worldy(), 0f, tilesize, tilesize, 0f);
+                float dark = world.getDarkness(x, y);
+                if(dark >= 4f) continue;
+                if(fr != null){
+                    if(dark > 0f){
+                        int g = (int)(255 * (1f - dark / 4f));
+                        tintQuad(fr, tile.worldx(), tile.worldy(), 0f, tilesize, 0f, Color.toFloatBits(g, g, g, 255));
+                    }else quad(fr, tile.worldx(), tile.worldy(), 0f, tilesize, tilesize, 0f);
+                }
 
                 if(tile.overlay() != Blocks.air && tile.overlay().region != null){
                     quad(tile.overlay().region, tile.worldx(), tile.worldy(), 0.05f, tilesize, tilesize, 0f);
