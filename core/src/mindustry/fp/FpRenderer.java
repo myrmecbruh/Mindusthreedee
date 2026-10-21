@@ -40,7 +40,7 @@ public class FpRenderer implements Disposable{
     /** World units per sprite pixel. */
     private static final float scl = 0.25f;
 
-    public boolean enabled;
+    public boolean enabled = !mindustry.Vars.mobile;
     /** Look direction in radians: yaw 0 looks along +x, pi/2 along +y; pitch up is positive. */
     public float yaw, pitch;
     public int radius = 40;
