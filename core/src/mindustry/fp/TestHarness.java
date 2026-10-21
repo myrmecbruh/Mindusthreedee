@@ -73,7 +73,7 @@ public class TestHarness implements ApplicationListener{
     private void scene(){
         var u = player.unit();
         if(u == null) return;
-        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.5f;
+        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.35f;
         control.input.block = mindustry.content.Blocks.duo;
         int tx = arc.math.geom.Geometry.d4x(0) + (int)(u.x / tilesize), ty = (int)(u.y / tilesize);
         var team = mindustry.game.Team.sharded;
