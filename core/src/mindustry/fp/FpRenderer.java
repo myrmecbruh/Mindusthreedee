@@ -239,6 +239,7 @@ public class FpRenderer implements Disposable{
         flatBuilds.clear();
         collectWorld(px, py, unit);
         collectUnits(unit);
+        if(unit != null && !unit.dead && !chase) shadow(unit);
         collectBullets();
         collectPlans(unit);
         collectEffects(px, py);
@@ -516,8 +517,16 @@ public class FpRenderer implements Disposable{
         }
     }
 
+    private void shadow(Unit u){
+        TextureRegion sh = Core.atlas.find("circle-shadow");
+        if(!sh.found()) return;
+        float size = Math.max(6f, u.hitSize * 1.5f), fade = Mathf.clamp(1f - u.elevation * 0.5f, 0.35f, 1f);
+        tintQuad(sh, u.x, u.y, 0.4f, size, 0f, Color.toFloatBits(0, 0, 0, (int)(110 * fade)));
+    }
+
     private void drawUnit(Unit u){
         UnitType type = u.type;
+        shadow(u);
         float z = type.flying || u.elevation > 0.01f ? flightAltitude * u.elevation : 0f;
         float rot = u.rotation - 90f;
 

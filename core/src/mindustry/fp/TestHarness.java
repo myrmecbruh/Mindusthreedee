@@ -66,31 +66,31 @@ public class TestHarness implements ApplicationListener{
         }
         if(best == null) return;
         u.set(best.worldx() - 22f, best.worldy());
-        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.35f;
+        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.62f;
         Log.info("FP_TEST: rock @ at @,@", best.block().name, best.x, best.y);
     }
 
     private void scene(){
         var u = player.unit();
         if(u == null) return;
-        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.35f;
+        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.62f;
         control.input.block = mindustry.content.Blocks.duo;
         int tx = arc.math.geom.Geometry.d4x(0) + (int)(u.x / tilesize), ty = (int)(u.y / tilesize);
         var team = mindustry.game.Team.sharded;
         Log.info("FP_TEST: scene at @,@ unit @ yaw @ units @", tx, ty, u.type.name, renderer.fp.yaw, mindustry.gen.Groups.unit.size());
         mindustry.type.UnitType[] types = {mindustry.content.UnitTypes.dagger, mindustry.content.UnitTypes.mace, mindustry.content.UnitTypes.flare, mindustry.content.UnitTypes.horizon, mindustry.content.UnitTypes.nova, mindustry.content.UnitTypes.crawler, mindustry.content.UnitTypes.atrax};
         for(int i = 0; i < types.length; i++){
-            var e = types[i].spawn(team, (tx + 5 + i * 2.2f) * tilesize, (ty + 0) * tilesize);
+            var e = types[i].spawn(team, (tx + 5 + i * 2.2f) * tilesize, (ty + 8) * tilesize);
             e.rotation = 180f;
         }
         mindustry.type.UnitType[] foes = {mindustry.content.UnitTypes.dagger, mindustry.content.UnitTypes.flare};
         for(int i = 0; i < foes.length; i++) foes[i].spawn(mindustry.game.Team.crux, (tx + 12 + i) * tilesize, (ty - 4) * tilesize);
         mindustry.world.Block[] bs = {mindustry.content.Blocks.duo, mindustry.content.Blocks.hail, mindustry.content.Blocks.scatter, mindustry.content.Blocks.graphitePress, mindustry.content.Blocks.mechanicalDrill, mindustry.content.Blocks.copperWall, mindustry.content.Blocks.copperWallLarge, mindustry.content.Blocks.lancer};
         for(int i = 0; i < bs.length; i++){
-            var t = world.tile(tx + 10 + i * 4, ty - 6);
+            var t = world.tile(tx + 6 + i * 3, ty + 2);
             if(t != null) t.setNet(bs[i], team, 0);
         }
-        for(int i = 0; i < 8; i++){ var t = world.tile(tx + 10 + i, ty - 10); if(t != null) t.setNet(mindustry.content.Blocks.conveyor, team, 0); }
+        for(int i = 0; i < 8; i++){ var t = world.tile(tx + 6 + i, ty - 3); if(t != null) t.setNet(mindustry.content.Blocks.conveyor, team, 0); }
     }
 
     @Override
