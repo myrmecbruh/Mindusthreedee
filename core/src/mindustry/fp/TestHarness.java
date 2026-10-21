@@ -19,7 +19,7 @@ import static mindustry.Vars.*;
 public class TestHarness implements ApplicationListener{
     private final int[] frames;
     private final String out;
-    private boolean sceneDone, rockDone;
+    private boolean sceneDone, rockDone, galleryDone;
     private int counter = -1, next = 0;
 
     private TestHarness(int[] frames, String out){
@@ -70,6 +70,21 @@ public class TestHarness implements ApplicationListener{
         Log.info("FP_TEST: rock @ at @,@", best.block().name, best.x, best.y);
     }
 
+    private void gallery(){
+        var u = player.unit();
+        var team = mindustry.game.Team.sharded;
+        mindustry.type.UnitType[] ts = {mindustry.content.UnitTypes.dagger, mindustry.content.UnitTypes.mace, mindustry.content.UnitTypes.fortress, mindustry.content.UnitTypes.scepter,
+            mindustry.content.UnitTypes.nova, mindustry.content.UnitTypes.pulsar, mindustry.content.UnitTypes.quasar, mindustry.content.UnitTypes.crawler,
+            mindustry.content.UnitTypes.atrax, mindustry.content.UnitTypes.spiroct, mindustry.content.UnitTypes.arkyid, mindustry.content.UnitTypes.flare,
+            mindustry.content.UnitTypes.horizon, mindustry.content.UnitTypes.zenith, mindustry.content.UnitTypes.mono, mindustry.content.UnitTypes.poly,
+            mindustry.content.UnitTypes.mega, mindustry.content.UnitTypes.risso, mindustry.content.UnitTypes.retusa, mindustry.content.UnitTypes.stell};
+        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.85f;
+        for(int i = 0; i < ts.length; i++){
+            var e = ts[i].spawn(team, u.x + 80f + (i % 5) * 34f, u.y - 60f + (i / 5) * 34f);
+            e.rotation = 90f;
+        }
+    }
+
     private void scene(){
         var u = player.unit();
         if(u == null) return;
@@ -97,6 +112,8 @@ public class TestHarness implements ApplicationListener{
     public void update(){
         if(!state.isGame()) return;
         counter++;
+        if(OS.env("FP_LOG") != null && counter % 60 == 0 && player.unit() != null) Log.info("FP_TEST: build plans " + player.unit().plans.size + " duos " + mindustry.gen.Groups.build.count(b -> b.block == mindustry.content.Blocks.duo) + " block " + (control.input.block == null ? "none" : control.input.block.name));
+        if(OS.env("FP_PLACE") != null && counter == 100) control.input.block = mindustry.content.Blocks.duo;
         if(OS.env("FP_BULLETS") != null && counter > 60 && counter % 8 == 0 && player.unit() != null){ var pu = player.unit(); for(int i = -2; i <= 2; i++) mindustry.content.UnitTypes.dagger.weapons.first().bullet.create(pu, pu.team, pu.x + (float)(Math.cos(renderer.fp.yaw) * 30f - Math.sin(renderer.fp.yaw) * i * 10f), pu.y + (float)(Math.sin(renderer.fp.yaw) * 30f + Math.cos(renderer.fp.yaw) * i * 10f), renderer.fp.yawDegrees(), 1f, 0.3f); }
         if(OS.env("FP_SHOOT") != null && player.unit() != null && counter > 60){ var pu = player.unit(); pu.isShooting = true; pu.aim(renderer.fp.aimPoint.x, renderer.fp.aimPoint.y); if(counter % 20 == 0) Log.info("FP_TEST: bullets @ mounts @ ammo @ aim @,@ pos @,@", mindustry.gen.Groups.bullet.size(), pu.mounts.length, pu.type.name, (int)pu.aimX, (int)pu.aimY, (int)pu.x, (int)pu.y); }
         if(OS.env("FP_FX") != null && counter % 50 == 0 && player.unit() != null){ var pu = player.unit(); mindustry.content.Fx.bigShockwave.at(pu.x + 60f, pu.y); mindustry.content.Fx.explosion.at(pu.x + 50f, pu.y + 10f); mindustry.content.Fx.blastExplosion.at(pu.x + 70f, pu.y - 10f); }
@@ -104,6 +121,10 @@ public class TestHarness implements ApplicationListener{
         if(!rockDone && OS.env("FP_ROCK") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             rockDone = true;
             rock();
+        }
+        if(!galleryDone && OS.env("FP_GALLERY") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
+            galleryDone = true;
+            gallery();
         }
         if(!sceneDone && OS.env("FP_SCENE") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             sceneDone = true;
