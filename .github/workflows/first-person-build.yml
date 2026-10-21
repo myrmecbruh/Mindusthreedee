@@ -9,23 +9,49 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+            ext: zip
+          - os: macos-latest
+            name: Mac
+            ext: zip
+          - os: ubuntu-latest
+            name: Linux
+            ext: tar.gz
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
-      - name: Build the desktop jar
+      - name: Build the jar
+        shell: bash
         run: ./gradlew :desktop:dist --no-daemon
-      - name: Publish the jar as a release
+      - name: Bundle with its own Java (no install needed)
+        shell: bash
+        run: |
+          mkdir -p input out
+          cp desktop/build/libs/Mindustry.jar input/
+          jpackage --type app-image --name Mindustry-FirstPerson --input input --main-jar Mindustry.jar --main-class mindustry.desktop.DesktopLauncher --dest out --java-options "-Xmx2g"
+          cd out
+          if [ "${{ matrix.ext }}" = "zip" ]; then
+            if [ "${{ matrix.name }}" = "Windows" ]; then 7z a ../Mindustry-FirstPerson-${{ matrix.name }}.zip Mindustry-FirstPerson; else zip -qr ../Mindustry-FirstPerson-${{ matrix.name }}.zip Mindustry-FirstPerson*; fi
+          else
+            tar czf ../Mindustry-FirstPerson-${{ matrix.name }}.tar.gz Mindustry-FirstPerson
+          fi
+      - name: Publish
         uses: softprops/action-gh-release@v2
         with:
           tag_name: first-person-latest
           name: First-person build (latest)
           body: |
-            Download `Mindustry.jar` and run it with Java 21: `java -jar Mindustry.jar`.
+            Download the file for your system, unzip it, and run Mindustry-FirstPerson (Mindustry-FirstPerson.exe on Windows). No Java needed.
             First-person is on by default; F8 toggles it. See FIRST_PERSON.md.
-          files: desktop/build/libs/Mindustry.jar
+          files: Mindustry-FirstPerson-${{ matrix.name }}.${{ matrix.ext }}
           prerelease: true
