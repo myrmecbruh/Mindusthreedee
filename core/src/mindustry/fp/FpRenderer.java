@@ -69,6 +69,12 @@ public class FpRenderer implements Disposable{
     private Mesh flatMesh;
     private float whiteU, whiteV;
     private boolean initialised, initialised2;
+    private final Seq<Building> flatBuilds = new Seq<>();
+    private FrameBuffer fx;
+    private TextureRegion fxRegion;
+    private float fxX, fxY;
+    private static final int fxSize = 1024;
+    private static final float fxSpan = 480f;
     private long collectNs;
     private int collectFrames;
 
@@ -174,6 +180,8 @@ public class FpRenderer implements Disposable{
         Vec2 off = Core.input.mouseWorld();
         Core.camera.position.set(gx - off.x, gy - off.y);
         Core.camera.update();
+        //the simulation culls effects and sounds by the camera's bounds; make them cover everything in sight. The projection matrices are already built, so mouse picking is unaffected
+        Core.camera.width = Core.camera.height = radius * tilesize * 2f;
     }
 
     private void ensureInit(){
@@ -207,6 +215,7 @@ public class FpRenderer implements Disposable{
         if(active()) placeAimCamera(eye.x, eye.y, eye.z, fx, fy, fz);
 
         Draw.flush();
+        renderEffects(px, py);
         Gl.depthMask(true);
         Gl.clearColor(0.55f, 0.72f, 0.88f, 1f);
         Gl.clear(Gl.colorBufferBit | Gl.depthBufferBit);
@@ -227,10 +236,12 @@ public class FpRenderer implements Disposable{
         long t0 = System.nanoTime();
         flat.each((t, seq) -> seq.clear());
         queue.clear();
+        flatBuilds.clear();
         collectWorld(px, py, unit);
         collectUnits(unit);
         collectBullets();
         collectPlans(unit);
+        collectEffects(px, py);
         collectNs += System.nanoTime() - t0;
         if(OS.env("FP_TEST") != null && ++collectFrames % 100 == 0){ Log.info("FP_TEST: collect @ ms/frame", collectNs / 1e6f / 100f); collectNs = 0; }
         drawFlat();
@@ -312,8 +323,9 @@ public class FpRenderer implements Disposable{
                     if(!block.rotate && models.poor(region, Kind.grounded, 0f, false)){
                         box(region, wx, wy, block.size * tilesize, Math.max(3f, block.size * tilesize * 0.45f));
                     }else{
-                        //still being fitted, or a part that turns: draw the sprite flat
+                        //still being fitted, or a part that turns: draw the sprite flat, and let the game draw the real thing on top
                         quad(region, wx, wy, 0.1f, block.size * tilesize, block.size * tilesize, rot);
+                        if(tile.build != null) flatBuilds.add(tile.build);
                     }
                 }else{
                     add(model, wx, wy, 0f, 0f);
@@ -434,6 +446,35 @@ public class FpRenderer implements Disposable{
         Lines.line(cx, cy - 12, cx, cy - 4); Lines.line(cx, cy + 4, cx, cy + 12);
         Draw.flush();
         Draw.reset();
+    }
+
+    /** Effects are drawn by the game in 2D; they are captured top-down into a texture and laid over the ground. */
+    private void renderEffects(float px, float py){
+        if(fx == null){
+            fx = new FrameBuffer(fxSize, fxSize);
+            fxRegion = new TextureRegion(fx.getTexture());
+            //framebuffers are upside down relative to atlas pages
+            fxRegion.u = 0f; fxRegion.u2 = 1f; fxRegion.v = 1f; fxRegion.v2 = 0f;
+        }
+        fxX = px; fxY = py;
+        fx.begin(Color.clear);
+        Draw.proj(px - fxSpan / 2f, py - fxSpan / 2f, fxSpan, fxSpan);
+        Draw.sort(true);
+        for(Building b : flatBuilds){
+            if(Math.abs(b.x - px) < fxSpan / 2f && Math.abs(b.y - py) < fxSpan / 2f && b.tile != null && b.tile.build == b) b.draw();
+        }
+        Groups.effect.each(e -> {
+            if(Math.abs(e.x - px) < fxSpan / 2f + 40f && Math.abs(e.y - py) < fxSpan / 2f + 40f) e.draw();
+        });
+        Draw.flush();
+        Draw.sort(false);
+        Draw.reset();
+        fx.end();
+    }
+
+    private void collectEffects(float px, float py){
+        if(fxRegion == null) return;
+        quad(fxRegion, fxX, fxY, 0.9f, fxSpan, fxSpan, 0f);
     }
 
     private void collectBullets(){

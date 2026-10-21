@@ -97,6 +97,7 @@ public class TestHarness implements ApplicationListener{
     public void update(){
         if(!state.isGame()) return;
         counter++;
+        if(OS.env("FP_FX") != null && counter % 50 == 0 && player.unit() != null){ var pu = player.unit(); mindustry.content.Fx.bigShockwave.at(pu.x + 60f, pu.y); mindustry.content.Fx.explosion.at(pu.x + 50f, pu.y + 10f); mindustry.content.Fx.blastExplosion.at(pu.x + 70f, pu.y - 10f); }
         if(OS.env("FP_LOG") != null && counter % 60 == 0 && player.unit() != null) Log.info("FP_TEST: pos @,@ yaw @ pitch @ mouse @,@", (int)player.unit().x, (int)player.unit().y, renderer.fp.yaw, renderer.fp.pitch, Core.input.mouseX(), Core.input.mouseY());
         if(!rockDone && OS.env("FP_ROCK") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             rockDone = true;
