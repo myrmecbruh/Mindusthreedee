@@ -60,6 +60,7 @@ public class FpRenderer implements Disposable{
 
     private final Camera3D cam = new Camera3D();
     private final ModelCache models = new ModelCache();
+    private final RockModels rocks = new RockModels();
     private final ObjectMap<VoxelModel, Mesh> meshes = new ObjectMap<>();
     private final ObjectMap<Texture, FloatSeq> flat = new ObjectMap<>();
     private final Seq<Draw3> queue = new Seq<>();
@@ -323,6 +324,10 @@ public class FpRenderer implements Disposable{
                     float hx = wx + Angles.trnsx(rotd + 90f, 0f, -rec), hy = wy + Angles.trnsy(rotd + 90f, 0f, -rec);
                     if(hm != null) add(hm, hx, hy, bh, rotd * Mathf.degRad);
                     else quad(t.region, hx, hy, bh, block.size * tilesize, block.size * tilesize, rotd);
+                    continue;
+                }
+                if(block.name.contains("boulder")){
+                    add(rocks.get(region, tile.pos()), wx, wy, 0f, 0f);
                     continue;
                 }
                 float rot = tile.build != null && block.rotate ? tile.build.rotdeg() : 0f;
