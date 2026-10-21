@@ -473,6 +473,24 @@ public class FpRenderer implements Disposable{
             part(type.region, false, u.x, u.y, z, rot, 0f);
         }
 
+        if(u instanceof Legsc lg){
+            float hipZ = z + Math.max(2f, type.legLength * 0.12f);
+            float c = Color.toFloatBits(70, 72, 82, 255);
+            float rx = Mathf.sin(yaw), ry = -Mathf.cos(yaw);
+            for(Leg l : lg.legs()){
+                if(l == null) continue;
+                float lift = l.moving ? Mathf.sin(l.stage * Mathf.PI) * 2.5f : 0f;
+                for(int k = 0; k <= 8; k++){
+                    float f = k / 8f;
+                    //hip -> joint -> foot
+                    float ax = f < 0.5f ? u.x : l.joint.x, ay = f < 0.5f ? u.y : l.joint.y, az = f < 0.5f ? hipZ : hipZ * 0.7f;
+                    float bx = f < 0.5f ? l.joint.x : l.base.x, by = f < 0.5f ? l.joint.y : l.base.y, bz = f < 0.5f ? hipZ * 0.7f : lift;
+                    float t = f < 0.5f ? f * 2f : (f - 0.5f) * 2f;
+                    billboard(Mathf.lerp(ax, bx, t), Mathf.lerp(ay, by, t), Mathf.lerp(az, bz, t) + 0.6f, 0.55f, rx, ry, c);
+                }
+            }
+        }
+
         float wz = z + (u instanceof Mechc ? 2.6f : 1.4f);
         for(WeaponMount mount : u.mounts){
             Weapon w = mount.weapon;
