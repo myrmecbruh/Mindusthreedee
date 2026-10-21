@@ -54,7 +54,9 @@ public class FpRenderer implements Disposable{
 
     private java.awt.Robot robot;
     private boolean robotFailed, captured;
-    private int centreX, centreY;
+    private int centreX, centreY, lastMx, lastMy;
+    private boolean calibrated;
+    private int tries;
 
     private final Camera3D cam = new Camera3D();
     private final ModelCache models = new ModelCache();
@@ -67,6 +69,8 @@ public class FpRenderer implements Disposable{
     private Mesh flatMesh;
     private float whiteU, whiteV;
     private boolean initialised, initialised2;
+    private long collectNs;
+    private int collectFrames;
 
     private static class Draw3{
         VoxelModel model;
@@ -124,15 +128,26 @@ public class FpRenderer implements Disposable{
         try{
             if(robot == null) robot = new java.awt.Robot();
             java.awt.Point p = java.awt.MouseInfo.getPointerInfo().getLocation();
+            int mx = Core.input.mouseX(), my = Core.input.mouseY();
             if(!captured){
-                //first frame: work out where the window centre is on the screen, from where the pointer is in the window
-                centreX = p.x - Core.input.mouseX() + Core.graphics.getWidth() / 2;
-                centreY = p.y - (Core.graphics.getHeight() - Core.input.mouseY()) + Core.graphics.getHeight() / 2;
+                //where the window centre is on the screen is unknown, so start at the pointer and let the window's own idea of the pointer correct it
+                centreX = p.x; centreY = p.y;
                 captured = true;
+                calibrated = false;
+                tries = 0;
+                lastMx = Integer.MIN_VALUE;
+            }else if(!calibrated){
+                if(mx != lastMx || my != lastMy){
+                    int errX = mx - Core.graphics.getWidth() / 2, errY = (Core.graphics.getHeight() - my) - Core.graphics.getHeight() / 2;
+                    if((errX == 0 && errY == 0) || ++tries > 40) calibrated = true;
+                    else{ centreX -= errX; centreY -= errY; }
+                }
             }else{
                 yaw -= (p.x - centreX) * lookSensitivity;
                 pitch = Mathf.clamp(pitch - (p.y - centreY) * lookSensitivity, -1.45f, 1.45f);
             }
+            lastMx = mx; lastMy = my;
+            if(OS.env("FP_LOG") != null && (int)Time.time % 60 == 0) Log.info("FP_TEST: look p @,@ centre @,@ arc @,@ cal @", p.x, p.y, centreX, centreY, mx, my, calibrated);
             robot.mouseMove(centreX, centreY);
         }catch(Throwable t){
             robotFailed = true;
@@ -209,12 +224,15 @@ public class FpRenderer implements Disposable{
         shader.setUniformf("u_scale", 1f);
         shader.setUniformf("u_rot", 0f);
 
+        long t0 = System.nanoTime();
         flat.each((t, seq) -> seq.clear());
         queue.clear();
         collectWorld(px, py, unit);
         collectUnits(unit);
         collectBullets();
         collectPlans(unit);
+        collectNs += System.nanoTime() - t0;
+        if(OS.env("FP_TEST") != null && ++collectFrames % 100 == 0){ Log.info("FP_TEST: collect @ ms/frame", collectNs / 1e6f / 100f); collectNs = 0; }
         drawFlat();
 
         Core.atlas.white().texture.bind(0);

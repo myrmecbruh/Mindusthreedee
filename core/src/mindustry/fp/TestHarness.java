@@ -73,7 +73,7 @@ public class TestHarness implements ApplicationListener{
     private void scene(){
         var u = player.unit();
         if(u == null) return;
-        renderer.fp.yaw = 1.2f; renderer.fp.pitch = -0.45f;
+        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.5f;
         control.input.block = mindustry.content.Blocks.duo;
         int tx = arc.math.geom.Geometry.d4x(0) + (int)(u.x / tilesize), ty = (int)(u.y / tilesize);
         var team = mindustry.game.Team.sharded;
@@ -97,6 +97,7 @@ public class TestHarness implements ApplicationListener{
     public void update(){
         if(!state.isGame()) return;
         counter++;
+        if(OS.env("FP_LOG") != null && counter % 60 == 0 && player.unit() != null) Log.info("FP_TEST: pos @,@ yaw @ pitch @ mouse @,@", (int)player.unit().x, (int)player.unit().y, renderer.fp.yaw, renderer.fp.pitch, Core.input.mouseX(), Core.input.mouseY());
         if(!rockDone && OS.env("FP_ROCK") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             rockDone = true;
             rock();
