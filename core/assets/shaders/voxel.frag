@@ -43,5 +43,7 @@ void main(){
     //low haze that thickens in the clouds
     fog = max(fog, smoothstep(0.35, 0.85, n) * smoothstep(u_fog.x * 0.5, u_fog.y, d) * 0.55);
     vec3 cloudColour = mix(u_cloudLo, u_cloudHi, n);
-    gl_FragColor = vec4(mix(c.rgb * u_dim, cloudColour, clamp(fog, 0.0, 1.0)), c.a);
+    //slow shadows of clouds passing overhead
+    float shade = mix(1.0, 0.84, smoothstep(0.5, 0.78, cloud(v_pos.xy * 0.0065 + vec2(u_time * 0.012, -u_time * 0.007))));
+    gl_FragColor = vec4(mix(c.rgb * u_dim * shade, cloudColour, clamp(fog, 0.0, 1.0)), c.a);
 }
