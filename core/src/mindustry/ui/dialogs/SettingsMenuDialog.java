@@ -370,6 +370,12 @@ public class SettingsMenuDialog extends BaseDialog{
         sound.sliderPref("sfxvol", 100, 0, 100, 1, i -> i + "%");
         sound.sliderPref("ambientvol", 100, 0, 100, 1, i -> i + "%");
 
+        //first-person view
+        game.sliderPref("fp-sensitivity", 5, 1, 12, 1, i -> i + "");
+        game.sliderPref("fp-fov", 75, 50, 110, 5, i -> i + "°");
+        game.checkPref("fp-invert", false);
+        game.checkPref("fp-fixeddistance", false);
+
         game.sliderPref("saveinterval", 60, 10, 5 * 120, 10, i -> Core.bundle.format("setting.seconds", i));
 
         if(mobile){

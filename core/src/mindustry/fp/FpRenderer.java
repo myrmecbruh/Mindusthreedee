@@ -56,6 +56,7 @@ public class FpRenderer implements Disposable{
     /** Height flying units hover at, in world units. Tall enough to clear the biggest buildings. */
     public static final float flightAltitude = 44f;
     public float lookSensitivity = 0.0028f;
+    private boolean invertY;
     /** Height of static walls in world units. */
     public static final float wallHeight = 12f;
 
@@ -113,6 +114,10 @@ public class FpRenderer implements Disposable{
             yaw = unit.rotation * Mathf.degRad;
             pitch = chase ? -0.5f : -0.25f;
         }
+        lookSensitivity = 0.0028f * Core.settings.getInt("fp-sensitivity", 5) / 5f;
+        invertY = Core.settings.getBool("fp-invert", false);
+        cam.fov = Core.settings.getInt("fp-fov", 75);
+        adapt = OS.env("FP_NOADAPT") == null && !Core.settings.getBool("fp-fixeddistance", false);
         look();
         return true;
     }
@@ -195,7 +200,7 @@ public class FpRenderer implements Disposable{
                 }else stuck = 0;
                 lastOx = ox; lastOy = oy;
                 yaw -= (p.x - centreX) * lookSensitivity;
-                pitch = Mathf.clamp(pitch - (p.y - centreY) * lookSensitivity, -1.45f, 1.45f);
+                pitch = Mathf.clamp(pitch - (p.y - centreY) * lookSensitivity * (invertY ? -1f : 1f), -1.45f, 1.45f);
             }
             lastMx = mx; lastMy = my;
             if(OS.env("FP_LOG") != null && (int)Time.time % 60 == 0) Log.info("FP_TEST: look p @,@ centre @,@ arc @,@ cal @", p.x, p.y, centreX, centreY, mx, my, calibrated);
