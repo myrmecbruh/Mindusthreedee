@@ -699,6 +699,7 @@ public class FpRenderer implements Disposable{
             if(b.type == null || Mathf.dst(b.x, b.y, eye.x, eye.y) > radius * tilesize) continue;
             float size = b.type instanceof mindustry.entities.bullet.BasicBulletType bb ? Math.max(1.2f, Math.min(5f, bb.height * 0.22f)) : 1.6f;
             float z = b.type.collidesGround && !b.type.collidesAir ? 2f : (b.type.collidesAir && !b.type.collidesGround ? flightAltitude : 6f);
+            if(b.type instanceof mindustry.entities.bullet.ArtilleryBulletType) z = 4f + Mathf.sin(Mathf.clamp(b.fin()) * Mathf.PI) * flightAltitude * 0.9f;
             Color c = b.type instanceof mindustry.entities.bullet.BasicBulletType bb2 && bb2.frontColor != null ? bb2.frontColor : Color.white;
             glow(b.x, b.y, z, size * 1.6f, rx, ry, c.toFloatBits());
         }
