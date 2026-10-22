@@ -163,6 +163,12 @@ public class FpRenderer implements Disposable{
     private boolean focusUnknown, lastFocus;
 
     /** True while the game window has keyboard focus: the pointer must not be grabbed from other programs. */
+    private static int step(int err){
+        if(err == 0) return 0;
+        int v = Math.round(err * 0.7f);
+        return v == 0 ? (int)Math.signum(err) : v;
+    }
+
     private boolean windowFocused(){
         if(focusUnknown) return true;
         try{
@@ -213,8 +219,11 @@ public class FpRenderer implements Disposable{
             }else if(!calibrated){
                 if(mx != lastMx || my != lastMy){
                     int errX = mx - Core.graphics.getWidth() / 2, errY = (Core.graphics.getHeight() - my) - Core.graphics.getHeight() / 2;
-                    if((errX == 0 && errY == 0) || ++tries > 40) calibrated = true;
-                    else{ centreX -= errX; centreY -= errY; }
+                    if((errX == 0 && errY == 0) || ++tries > 80) calibrated = true;
+                    else{
+                        //damped, because the window's pixels and the pointer's coordinates can differ in scale (display scaling)
+                        centreX -= step(errX); centreY -= step(errY);
+                    }
                 }
             }else{
                 int ox = p.x - centreX, oy = p.y - centreY;
