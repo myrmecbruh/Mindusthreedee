@@ -120,6 +120,25 @@ public class FpRenderer implements Disposable{
     /** The point on the ground the crosshair is over. */
     public final Vec2 aimPoint = new Vec2();
 
+    private arc.Graphics.Cursor blankCursor;
+    private boolean cursorHidden;
+
+    /** The pointer is invisible while aiming; the crosshair takes its place. */
+    private void hideCursor(){
+        try{
+            if(blankCursor == null){
+                arc.graphics.Pixmap blank = new arc.graphics.Pixmap(2, 2);
+                blank.fill(0);
+                blankCursor = Core.graphics.newCursor(blank, 0, 0);
+                blank.dispose();
+            }
+            Core.graphics.cursor(blankCursor);
+            cursorHidden = true;
+        }catch(Throwable t){
+            //no custom cursors on this platform: leave the pointer alone
+        }
+    }
+
     /** Mouse look. The pointer is pinned to the window centre with a Robot, since Arc's SDL binding has no pointer lock. Q and E also turn. */
     private void look(){
         boolean free = Core.input.keyDown(KeyCode.altLeft) || Core.scene.hasDialog() || Core.scene.hasField() || ui.chatfrag.shown() || !state.isGame();
@@ -130,8 +149,13 @@ public class FpRenderer implements Disposable{
         }
         if(free || robotFailed){
             captured = false;
+            if(cursorHidden){
+                cursorHidden = false;
+                Core.graphics.restoreCursor();
+            }
             return;
         }
+        hideCursor();
         try{
             if(robot == null) robot = new java.awt.Robot();
             java.awt.Point p = java.awt.MouseInfo.getPointerInfo().getLocation();
