@@ -10,7 +10,7 @@ uniform float u_rot;
 
 varying vec4 v_color;
 varying vec2 v_uv;
-varying float v_fog;
+varying vec3 v_pos;
 
 void main(){
     float c = cos(u_rot), s = sin(u_rot);
@@ -21,6 +21,6 @@ void main(){
     float light = 0.5 + 0.5 * max(dot(n, normalize(vec3(-0.35, -0.45, 0.82))), 0.0);
     v_color = vec4(a_color.rgb * light, a_color.a);
     v_uv = a_texCoord0;
+    v_pos = p;
     gl_Position = u_proj * vec4(p, 1.0);
-    v_fog = smoothstep(190.0, 320.0, gl_Position.w);
 }

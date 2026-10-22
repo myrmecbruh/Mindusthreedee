@@ -43,7 +43,13 @@ public class FpRenderer implements Disposable{
     public boolean enabled = !mindustry.Vars.mobile;
     /** Look direction in radians: yaw 0 looks along +x, pi/2 along +y; pitch up is positive. */
     public float yaw, pitch;
+    /** How many tiles around the player are drawn. Adapts to keep the frame rate up; the map itself is the limit. */
     public int radius = 40;
+    public static final int minRadius = 14;
+    public static final float targetFps = 45f;
+    private float smoothDt = 1f / 60f;
+    private int adaptTimer;
+    private boolean adapt = OS.env("FP_NOADAPT") == null;
     public boolean chase;
     public float chaseDistance = 90f;
     /** Height flying units hover at, in world units. Tall enough to clear the biggest buildings. */
@@ -89,6 +95,7 @@ public class FpRenderer implements Disposable{
         cam.near = 0.6f;
         cam.far = 4000f;
         chase = OS.env("FP_CHASE") != null;
+        if(OS.env("FP_RADIUS") != null) radius = Strings.parseInt(OS.env("FP_RADIUS"), 40);
         if(chase && Strings.canParseFloat(OS.env("FP_CHASE"))) chaseDistance = Strings.parseFloat(OS.env("FP_CHASE"));
     }
 
@@ -209,11 +216,66 @@ public class FpRenderer implements Disposable{
         Core.camera.width = Core.camera.height = radius * tilesize * 2f;
     }
 
+    private static final int flatCapacity = 360000;
+
+    /** Nudges the draw distance so the frame rate stays above the target, as far out as the map goes. */
+    private void adaptRadius(){
+        float dt = Math.min(0.25f, Core.graphics.getDeltaTime());
+        smoothDt += (dt - smoothDt) * 0.1f;
+        if(!adapt || ++adaptTimer < 15) return;
+        adaptTimer = 0;
+        float fps = 1f / Math.max(0.001f, smoothDt);
+        int max = Math.min(260, Math.max(world.width(), world.height()));
+        if(fps < targetFps) radius = Math.max(minRadius, (int)(radius * (fps < targetFps * 0.7f ? 0.82f : 0.94f)));
+        else if(fps > targetFps * 1.25f) radius = Math.min(max, Math.max(radius + 1, (int)(radius * 1.04f)));
+    }
+
+    private final Color skyColor = new Color(0.55f, 0.72f, 0.88f), cloudLo = new Color(), cloudHi = new Color();
+    private float dim = 1f;
+
+    /** Sky and cloud colours come from the level: the planet's atmosphere, the rules' cloud colour, and the ambient light of dark levels. */
+    private Object envTiles;
+    private final Color levelTint = new Color(0.6f, 0.7f, 0.8f);
+
+    /** The level's own palette: the average colour of its floors, sampled once per map. */
+    private void sampleLevel(){
+        if(envTiles == world.tiles) return;
+        envTiles = world.tiles;
+        float r = 0, g = 0, b = 0;
+        int n = 0, step = Math.max(1, Math.min(world.width(), world.height()) / 48);
+        for(int x = 0; x < world.width(); x += step) for(int y = 0; y < world.height(); y += step){
+            Tile t = world.tile(x, y);
+            if(t == null || t.floor() == null) continue;
+            Color c = t.floor().mapColor;
+            r += c.r; g += c.g; b += c.b; n++;
+        }
+        if(n > 0) levelTint.set(r / n, g / n, b / n, 1f);
+    }
+
+    private void environment(){
+        sampleLevel();
+        var planet = state.rules.planet != null ? state.rules.planet : mindustry.content.Planets.serpulo;
+        //the sky takes the level's floor palette, lightened, with a touch of the planet's atmosphere
+        skyColor.set(levelTint).lerp(Color.white, 0.5f).lerp(planet.atmosphereColor, 0.3f);
+        Color cloud = state.rules.cloudColor.a > 0.01f ? state.rules.cloudColor : planet.landCloudColor;
+        cloudHi.set(Color.white).lerp(cloud, 0.45f).lerp(skyColor, 0.2f);
+        cloudLo.set(cloudHi).lerp(skyColor, 0.5f).mul(0.82f);
+        dim = 1f;
+        if(state.rules.lighting){
+            Color amb = state.rules.ambientLight;
+            dim = Math.max(0.55f, 1f - amb.a * 0.5f);
+            skyColor.lerp(amb, 0.5f * amb.a).mul(0.6f + 0.4f * dim);
+            cloudHi.lerp(amb, 0.5f * amb.a).mul(dim);
+            cloudLo.lerp(amb, 0.5f * amb.a).mul(dim);
+        }
+        skyColor.a = cloudLo.a = cloudHi.a = 1f;
+    }
+
     private void ensureInit(){
         if(!initialised2){ initialised2 = true; Log.info("FP_TEST: depth bits @", Core.graphics.getBufferFormat().depth); }
         if(shader != null) return;
         shader = new Shader(Core.files.internal("shaders/voxel.vert"), Core.files.internal("shaders/voxel.frag"));
-        flatMesh = new Mesh(false, 6 * (radius * 2 + 1) * (radius * 2 + 1) * 8, 0,
+        flatMesh = new Mesh(false, flatCapacity, 0,
             VertexAttribute.position3, VertexAttribute.normal, VertexAttribute.color, VertexAttribute.texCoords);
         TextureRegion white = Core.atlas.white();
         whiteU = (white.u + white.u2) / 2f;
@@ -222,6 +284,8 @@ public class FpRenderer implements Disposable{
 
     public void render(){
         ensureInit();
+        adaptRadius();
+        environment();
         Unit unit = player.unit();
         float px = unit != null && !unit.dead ? unit.x : Core.camera.position.x, py = unit != null && !unit.dead ? unit.y : Core.camera.position.y;
 
@@ -242,7 +306,7 @@ public class FpRenderer implements Disposable{
         Draw.flush();
         renderEffects(px, py);
         Gl.depthMask(true);
-        Gl.clearColor(0.55f, 0.72f, 0.88f, 1f);
+        Gl.clearColor(skyColor.r, skyColor.g, skyColor.b, 1f);
         Gl.clear(Gl.colorBufferBit | Gl.depthBufferBit);
         Gl.enable(Gl.depthTest);
         Gl.depthFunc(Gl.lequal);
@@ -257,6 +321,12 @@ public class FpRenderer implements Disposable{
         shader.setUniformf("u_offset", 0f, 0f, 0f);
         shader.setUniformf("u_scale", 1f);
         shader.setUniformf("u_rot", 0f);
+        shader.setUniformf("u_eye", eye.x, eye.y, eye.z);
+        shader.setUniformf("u_time", Time.time / 60f);
+        shader.setUniformf("u_cloudLo", cloudLo.r, cloudLo.g, cloudLo.b);
+        shader.setUniformf("u_cloudHi", cloudHi.r, cloudHi.g, cloudHi.b);
+        shader.setUniformf("u_dim", dim);
+        shader.setUniformf("u_fog", radius * tilesize * 0.45f, radius * tilesize * 0.97f);
 
         long t0 = System.nanoTime();
         flat.each((t, seq) -> seq.clear());
@@ -269,7 +339,7 @@ public class FpRenderer implements Disposable{
         collectPlans(unit);
         collectEffects(px, py);
         collectNs += System.nanoTime() - t0;
-        if(OS.env("FP_TEST") != null && ++collectFrames % 100 == 0){ Log.info("FP_TEST: collect @ ms/frame", collectNs / 1e6f / 100f); collectNs = 0; }
+        if(OS.env("FP_TEST") != null && ++collectFrames % 100 == 0){ Log.info("FP_TEST: collect @ ms/frame, radius @, fps @", collectNs / 1e6f / 100f, radius, (int)(1f / smoothDt)); collectNs = 0; }
         drawFlat();
 
         Core.atlas.white().texture.bind(0);
@@ -282,8 +352,15 @@ public class FpRenderer implements Disposable{
 
     private void collectWorld(float px, float py, Unit self){
         int cx = World.toTile(px), cy = World.toTile(py);
-        for(int x = cx - radius; x <= cx + radius; x++){
-            for(int y = cy - radius; y <= cy + radius; y++){
+        float fwx = Mathf.cos(yaw), fwy = Mathf.sin(yaw);
+        boolean cull = pitch > -0.8f && radius > 20;
+        float r2 = (float)radius * radius;
+        for(int x = Math.max(0, cx - radius); x <= Math.min(world.width() - 1, cx + radius); x++){
+            for(int y = Math.max(0, cy - radius); y <= Math.min(world.height() - 1, cy + radius); y++){
+                float ddx = x - cx, ddy = y - cy, dd = ddx * ddx + ddy * ddy;
+                if(dd > r2) continue;
+                //outside the view cone (with a margin for tall things)
+                if(cull && dd > 49f && (ddx * fwx + ddy * fwy) < Math.sqrt(dd) * 0.25f) continue;
                 Tile tile = world.tile(x, y);
                 if(tile == null) continue;
 
@@ -634,11 +711,15 @@ public class FpRenderer implements Disposable{
     }
 
     private void drawFlat(){
+        int maxFloats = (flatCapacity / 6 * 6) * vertexFloats;
         for(var e : flat){
             if(e.value.size == 0) continue;
             e.key.bind(0);
-            flatMesh.setVertices(e.value.items, 0, Math.min(e.value.size, flatMesh.getMaxVertices() * vertexFloats));
-            flatMesh.render(shader, Gl.triangles, 0, Math.min(e.value.size / vertexFloats, flatMesh.getMaxVertices()));
+            for(int off = 0; off < e.value.size; off += maxFloats){
+                int n = Math.min(maxFloats, e.value.size - off);
+                flatMesh.setVertices(e.value.items, off, n);
+                flatMesh.render(shader, Gl.triangles, 0, n / vertexFloats);
+            }
         }
     }
 
