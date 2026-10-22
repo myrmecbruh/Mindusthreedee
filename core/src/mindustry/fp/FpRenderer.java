@@ -54,7 +54,7 @@ public class FpRenderer implements Disposable{
     public boolean chase;
     public float chaseDistance = 90f;
     /** Height flying units hover at, in world units. Tall enough to clear the biggest buildings. */
-    public static final float flightAltitude = 44f;
+    public static float flightAltitude = 44f;
     public float lookSensitivity = 0.0028f;
     private boolean invertY;
     /** Height of static walls in world units. */
@@ -114,6 +114,9 @@ public class FpRenderer implements Disposable{
             yaw = unit.rotation * Mathf.degRad;
             pitch = chase ? -0.5f : -0.25f;
         }
+        //the mouse wheel raises and lowers the view when nothing is being placed
+        float wheel = Core.input.axis(KeyCode.scroll);
+        if(wheel != 0f && control.input.block == null && !Core.scene.hasMouse()) flightAltitude = Mathf.clamp(flightAltitude + wheel * 5f, 12f, 150f);
         lookSensitivity = 0.0028f * Core.settings.getInt("fp-sensitivity", 5) / 5f;
         invertY = Core.settings.getBool("fp-invert", false);
         cam.fov = Core.settings.getInt("fp-fov", 75);
