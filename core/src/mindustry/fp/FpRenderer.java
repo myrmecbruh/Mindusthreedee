@@ -389,6 +389,9 @@ public class FpRenderer implements Disposable{
                 }
                 if(tile.build != null && !tile.isCenter()) continue;
 
+                if(tile.build != null && tile.build.damaged() && tile.build.health > 0f){
+                    healthBar(tile.build.x, tile.build.y, block.size * tilesize * 0.6f + 4f, block.size * tilesize, tile.build.health / tile.build.maxHealth, tile.build.team.color);
+                }
                 float wx = tile.build != null ? tile.build.x : tile.worldx();
                 float wy = tile.build != null ? tile.build.y : tile.worldy();
                 TextureRegion region = block.region;
@@ -602,6 +605,30 @@ public class FpRenderer implements Disposable{
         }
     }
 
+    private void rectBoard(float x, float y, float z, float w, float h, float rx, float ry, float color){
+        TextureRegion t = Core.atlas.white();
+        FloatSeq seq = flat.get(t.texture);
+        if(seq == null) flat.put(t.texture, seq = new FloatSeq());
+        float[][] pts = {{-1, 0}, {1, 0}, {1, 1}, {-1, 1}};
+        int[] order = {0, 1, 2, 0, 2, 3};
+        for(int i : order){
+            seq.add(x + rx * pts[i][0] * w, y + ry * pts[i][0] * w, z + pts[i][1] * h);
+            seq.add(0f, 0f, 1f);
+            seq.add(color);
+            seq.add(whiteU, whiteV);
+        }
+    }
+
+    /** A health bar over something damaged, always facing the camera. */
+    private void healthBar(float x, float y, float z, float width, float frac, Color team){
+        if(frac >= 0.999f || frac < 0f) return;
+        float rx = Mathf.sin(yaw), ry = -Mathf.cos(yaw), half = width / 2f, hh = 0.9f;
+        rectBoard(x, y, z, half + 0.4f, hh + 0.4f, rx, ry, Color.toFloatBits(20, 20, 24, 255));
+        float fx = x - rx * half * (1f - frac), fy = y - ry * half * (1f - frac);
+        Color c = Tmp.c1.set(Color.scarlet).lerp(Color.valueOf("84f491"), frac);
+        rectBoard(fx, fy, z + 0.25f, half * frac, hh, rx, ry, c.toFloatBits());
+    }
+
     private void billboard(float x, float y, float z, float s, float rx, float ry, float color){
         TextureRegion w = Core.atlas.white();
         FloatSeq seq = flat.get(w.texture);
@@ -640,6 +667,7 @@ public class FpRenderer implements Disposable{
     private void drawUnit(Unit u){
         UnitType type = u.type;
         shadow(u);
+        healthBar(u.x, u.y, (type.flying || u.elevation > 0.01f ? flightAltitude * u.elevation : 0f) + type.hitSize * 0.5f + 5f, Math.max(8f, type.hitSize * 1.3f), u.health / u.maxHealth, u.team.color);
         float z = type.flying || u.elevation > 0.01f ? flightAltitude * u.elevation : 0f;
         float rot = u.rotation - 90f;
 

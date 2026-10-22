@@ -96,7 +96,7 @@ public class TestHarness implements ApplicationListener{
         mindustry.type.UnitType[] types = {mindustry.content.UnitTypes.dagger, mindustry.content.UnitTypes.mace, mindustry.content.UnitTypes.flare, mindustry.content.UnitTypes.horizon, mindustry.content.UnitTypes.nova, mindustry.content.UnitTypes.crawler, mindustry.content.UnitTypes.atrax};
         for(int i = 0; i < types.length; i++){
             var e = types[i].spawn(team, (tx + 5 + i * 2.2f) * tilesize, (ty + 8) * tilesize);
-            e.rotation = 180f;
+            e.rotation = 180f; e.health = e.maxHealth * (0.3f + 0.1f * i);
         }
         mindustry.type.UnitType[] foes = {mindustry.content.UnitTypes.dagger, mindustry.content.UnitTypes.flare};
         for(int i = 0; i < foes.length; i++) foes[i].spawn(mindustry.game.Team.crux, (tx + 12 + i) * tilesize, (ty - 4) * tilesize);
