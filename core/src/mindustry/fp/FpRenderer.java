@@ -80,6 +80,8 @@ public class FpRenderer implements Disposable{
     private float whiteU, whiteV;
     private boolean initialised, initialised2;
     private final Seq<Building> flatBuilds = new Seq<>();
+    private boolean fxActive;
+    private int failures;
     private FrameBuffer fx;
     private TextureRegion fxRegion;
     private float fxX, fxY;
@@ -313,6 +315,29 @@ public class FpRenderer implements Disposable{
             cloudLo.lerp(amb, 0.5f * amb.a).mul(dim);
         }
         skyColor.a = cloudLo.a = cloudHi.a = 1f;
+    }
+
+    /** Called by the renderer when a frame threw: puts the graphics state back, and gives up after repeated failures. Returns true if first-person should stay on. */
+    public boolean recover(Throwable t){
+        Log.err("First-person renderer failed", t);
+        try{
+            if(fxActive && fx != null) fx.end();
+        }catch(Throwable ignored){}
+        fxActive = false;
+        Draw.sort(false);
+        Draw.reset();
+        Gl.disable(Gl.depthTest);
+        if(++failures >= 5){
+            Log.err("First-person renderer failed repeatedly, switching it off (F8 turns it back on)");
+            enabled = false;
+            failures = 0;
+            return false;
+        }
+        return true;
+    }
+
+    public void frameSucceeded(){
+        failures = 0;
     }
 
     private void ensureInit(){
@@ -610,6 +635,7 @@ public class FpRenderer implements Disposable{
         }
         fxX = px; fxY = py;
         fx.begin(Color.clear);
+        fxActive = true;
         Draw.proj(px - fxSpan / 2f, py - fxSpan / 2f, fxSpan, fxSpan);
         Draw.sort(true);
         for(Building b : flatBuilds){
@@ -629,6 +655,7 @@ public class FpRenderer implements Disposable{
         Draw.sort(false);
         Draw.reset();
         fx.end();
+        fxActive = false;
     }
 
     private void collectEffects(float px, float py){
@@ -703,7 +730,9 @@ public class FpRenderer implements Disposable{
         TextureRegion sh = Core.atlas.find("circle-shadow");
         if(!sh.found()) return;
         float size = Math.max(6f, u.hitSize * 1.5f), fade = Mathf.clamp(1f - u.elevation * 0.5f, 0.35f, 1f);
-        tintQuad(sh, u.x, u.y, 0.4f, size, 0f, Color.toFloatBits(0, 0, 0, (int)(110 * fade)));
+        //the team's colour shows through the shadow, so friend and foe can be told apart from above
+        Color t = u.team.color;
+        tintQuad(sh, u.x, u.y, 0.4f, size, 0f, Color.toFloatBits((int)(t.r * 150), (int)(t.g * 150), (int)(t.b * 150), (int)(150 * fade)));
     }
 
     private void drawUnit(Unit u){

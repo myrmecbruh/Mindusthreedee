@@ -323,13 +323,12 @@ public class Renderer implements ApplicationListener{
         if(fp.update()){
             try{
                 fp.render();
+                fp.frameSucceeded();
             }catch(Throwable t){
-                //never leave the player with a broken screen: go back to the normal view
-                Log.err("First-person renderer failed, switching it off", t);
-                fp.enabled = false;
-                Gl.disable(Gl.depthTest);
-                Draw.reset();
-                return;
+                //a bad frame must not leave the player with a broken screen; after repeated failures go back to the normal view
+                if(!fp.recover(t)){
+                    return;
+                }
             }
             Draw.reset();
             return;
