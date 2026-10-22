@@ -156,15 +156,38 @@ public class FpRenderer implements Disposable{
         }
     }
 
+    private java.lang.reflect.Method getWindow, getFlags;
+    private int focusFlag;
+    private boolean focusUnknown, lastFocus;
+
+    /** True while the game window has keyboard focus: the pointer must not be grabbed from other programs. */
+    private boolean windowFocused(){
+        if(focusUnknown) return true;
+        try{
+            if(getFlags == null){
+                getWindow = Core.app.getClass().getMethod("getWindow");
+                Class<?> sdl = Class.forName("arc.backend.sdl.jni.SDL");
+                getFlags = sdl.getMethod("SDL_GetWindowFlags", long.class);
+                focusFlag = sdl.getField("SDL_WINDOW_INPUT_FOCUS").getInt(null);
+            }
+            long window = (Long)getWindow.invoke(Core.app);
+            boolean f = ((Integer)getFlags.invoke(null, window) & focusFlag) != 0;
+            if(OS.env("FP_TEST") != null && f != lastFocus){ lastFocus = f; Log.info("FP_TEST: window focus @", f); }
+            return f;
+        }catch(Throwable t){
+            focusUnknown = true;
+            return true;
+        }
+    }
+
     /** Mouse look. The pointer is pinned to the window centre with a Robot, since Arc's SDL binding has no pointer lock. Q and E also turn. */
     private void look(){
-        boolean free = Core.input.keyDown(KeyCode.altLeft) || Core.scene.hasDialog() || Core.scene.hasField() || ui.chatfrag.shown() || !state.isGame();
+        boolean free = !windowFocused() || Core.input.keyDown(KeyCode.altLeft) || Core.scene.hasDialog() || Core.scene.hasField() || ui.chatfrag.shown() || !state.isGame();
         float turn = 0.045f * Time.delta;
         if(!free){
             if(Core.input.keyDown(KeyCode.q)) yaw += turn;
             if(Core.input.keyDown(KeyCode.e)) yaw -= turn;
         }
-        if(OS.env("FP_TEST") != null && OS.env("FP_LOOK") == null) return;
         if(free || robotFailed){
             captured = false;
             if(cursorHidden){
