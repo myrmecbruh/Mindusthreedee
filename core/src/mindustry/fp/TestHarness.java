@@ -19,7 +19,7 @@ import static mindustry.Vars.*;
 public class TestHarness implements ApplicationListener{
     private final int[] frames;
     private final String out;
-    private boolean sceneDone, rockDone, galleryDone, closeDone;
+    private boolean sceneDone, rockDone, galleryDone, closeDone, blocksDone;
     private int counter = -1, next = 0;
 
     private TestHarness(int[] frames, String out){
@@ -100,6 +100,29 @@ public class TestHarness implements ApplicationListener{
         renderer.fp.yaw = 0f; renderer.fp.pitch = -0.95f;
     }
 
+    /** Every block there is, in a grid, seen from high above. */
+    private void blocks(){
+        var u = player.unit();
+        int tx = (int)(u.x / tilesize) + 30, ty = (int)(u.y / tilesize) - 12;
+        var team = mindustry.game.Team.sharded;
+        int col = 0, row = 0, rowH = 1, count = 0, perRow = Strings.parseInt(OS.env("FP_PERROW") == null ? "10" : OS.env("FP_PERROW"), 10), skip = Strings.parseInt(OS.env("FP_SKIP") == null ? "0" : OS.env("FP_SKIP"), 0);
+        int seen = 0;
+        for(mindustry.world.Block b : content.blocks()){
+            if(b.isStatic() || b.isFloor() || b.isOverlay() || b instanceof mindustry.world.blocks.environment.Prop || b.buildVisibility == mindustry.world.meta.BuildVisibility.hidden || b.size > 5) continue;
+            if(b instanceof mindustry.world.blocks.storage.CoreBlock) continue;
+            if(seen++ < skip) continue;
+            if(col + b.size > perRow * 4){ col = 0; row += rowH + 1; rowH = 1; }
+            var t = world.tile(tx + col + (b.size - 1) / 2, ty + row + (b.size - 1) / 2);
+            if(t != null){ t.setNet(b, team, 0); count++; }
+            col += b.size + 1; rowH = Math.max(rowH, b.size);
+            if(count >= 60) break;
+        }
+        Log.info("FP_TEST: placed @ blocks, skipped @", count, skip);
+        u.set((tx + 18) * tilesize - 20f, (ty + 12) * tilesize);
+        renderer.fp.flightAltitude = 235f;
+        renderer.fp.yaw = 0f; renderer.fp.pitch = -1.45f;
+    }
+
     private void scene(){
         var u = player.unit();
         if(u == null) return;
@@ -146,6 +169,10 @@ public class TestHarness implements ApplicationListener{
         if(!closeDone && OS.env("FP_UNIT") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             closeDone = true;
             closeup();
+        }
+        if(!blocksDone && OS.env("FP_BLOCKS") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
+            blocksDone = true;
+            blocks();
         }
         if(!sceneDone && OS.env("FP_SCENE") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             sceneDone = true;

@@ -80,6 +80,9 @@ public class FpRenderer implements Disposable{
     private float whiteU, whiteV;
     private boolean initialised, initialised2;
     private final Seq<Building> flatBuilds = new Seq<>();
+    private BuildingRenderer buildings;
+    private final ObjectMap<Texture, FloatSeq> glowFlat = new ObjectMap<>();
+    private final boolean legacyBuildings = OS.hasProp("fp.legacybuildings");
     private boolean fxActive;
     private int failures;
     private FrameBuffer fx;
@@ -87,7 +90,8 @@ public class FpRenderer implements Disposable{
     private float fxX, fxY;
     private static final int fxSize = 1024;
     private static final float fxSpan = 480f;
-    private long collectNs;
+    private long collectNs, buildNs;
+    private int buildCount;
     private int collectFrames;
 
     private static class Draw3{
@@ -355,6 +359,7 @@ public class FpRenderer implements Disposable{
         shader = new Shader(Core.files.internal("shaders/voxel.vert"), Core.files.internal("shaders/voxel.frag"));
         flatMesh = new Mesh(false, flatCapacity, 0,
             VertexAttribute.position3, VertexAttribute.normal, VertexAttribute.color, VertexAttribute.texCoords);
+        buildings = new BuildingRenderer(models, this::seqFor, this::glowSeqFor);
         TextureRegion white = Core.atlas.white();
         whiteU = (white.u + white.u2) / 2f;
         whiteV = (white.v + white.v2) / 2f;
@@ -408,9 +413,11 @@ public class FpRenderer implements Disposable{
 
         long t0 = System.nanoTime();
         flat.each((t, seq) -> seq.clear());
+        glowFlat.each((t, seq) -> seq.clear());
         lastTexture = null;
         queue.clear();
         flatBuilds.clear();
+        if(buildings != null) buildings.beginFrame();
         collectWorld(px, py, unit);
         collectUnits(unit);
         if(unit != null && !unit.dead && !chase) shadow(unit);
@@ -418,11 +425,15 @@ public class FpRenderer implements Disposable{
         collectPlans(unit);
         collectEffects(px, py);
         collectNs += System.nanoTime() - t0;
-        if(OS.env("FP_TEST") != null && ++collectFrames % 100 == 0){ Log.info("FP_TEST: collect @ ms/frame, radius @, fps @", collectNs / 1e6f / 100f, radius, (int)(1f / smoothDt)); collectNs = 0; }
+        if(OS.env("FP_TEST") != null && ++collectFrames % 100 == 0){ Log.info("FP_TEST: collect @ ms/frame (buildings @ ms, @ drawn), radius @, fps @", collectNs / 1e6f / 100f, buildNs / 1e6f / 100f, buildCount / 100, radius, (int)(1f / smoothDt)); collectNs = 0; buildNs = 0; buildCount = 0; }
         drawFlat();
 
         Core.atlas.white().texture.bind(0);
         drawQueue();
+        //glows and other translucent layers last, without writing depth
+        Gl.depthMask(false);
+        drawFlat(glowFlat);
+        Gl.depthMask(true);
 
         Gl.disable(Gl.depthTest);
         Gl.enable(Gl.blend);
@@ -478,6 +489,17 @@ public class FpRenderer implements Disposable{
                 if(tile.build != null && tile.build.damaged() && tile.build.health > 0f){
                     healthBar(tile.build.x, tile.build.y, block.size * tilesize * 0.6f + 4f, block.size * tilesize, tile.build.health / tile.build.maxHealth, tile.build.team.color);
                 }
+                //every layer and animation of the block, as the game itself draws it
+                if(tile.build != null && !legacyBuildings){
+                    //near buildings are drawn afresh every frame; far ones replay a recording for a few frames
+                    float tiles = Mathf.dst(x, y, cx, cy);
+                    int interval = tiles < 14f ? 1 : tiles < 35f ? 3 : tiles < 80f ? 6 : 12;
+                    long bt = System.nanoTime();
+                    boolean drew = buildings.draw(tile.build, interval);
+                    buildNs += System.nanoTime() - bt; buildCount++;
+                    if(drew) continue;
+                }
+
                 float wx = tile.build != null ? tile.build.x : tile.worldx();
                 float wy = tile.build != null ? tile.build.y : tile.worldy();
                 TextureRegion region = block.region;
@@ -873,6 +895,12 @@ public class FpRenderer implements Disposable{
         return seq;
     }
 
+    private FloatSeq glowSeqFor(Texture t){
+        FloatSeq seq = glowFlat.get(t);
+        if(seq == null) glowFlat.put(t, seq = new FloatSeq());
+        return seq;
+    }
+
     private void quad(TextureRegion r, float x, float y, float z, float w, float h, float rot){
         quadColored(r, x, y, z, w, h, rot, Color.whiteFloatBits);
     }
@@ -893,8 +921,12 @@ public class FpRenderer implements Disposable{
     }
 
     private void drawFlat(){
+        drawFlat(flat);
+    }
+
+    private void drawFlat(ObjectMap<Texture, FloatSeq> map){
         int maxFloats = (flatCapacity / 6 * 6) * vertexFloats;
-        for(var e : flat){
+        for(var e : map){
             if(e.value.size == 0) continue;
             e.key.bind(0);
             for(int off = 0; off < e.value.size; off += maxFloats){
