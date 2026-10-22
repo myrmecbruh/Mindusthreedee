@@ -102,7 +102,7 @@ public class ModelCache{
         int budget = Math.max(12, Math.min(300, Math.round(opaque * 0.15f)));
         Fitter f = new Fitter(px, w, h, sym);
         f.allowOctahedra = kind != Kind.grounded;
-        Result r = f.fit(budget, 6);
+        Result r = f.fit(budget, kind == Kind.layer ? 14 : 8);
         if(r.shapes.isEmpty() || (kind == Kind.grounded && r.coverage < 0.6f)){ slot.poor = true; return null; }
         float maxH = ((x1 - x0 + 1) + (y1 - y0 + 1)) / 2f;
         //buildings follow the (width + depth) / 2 rule; parts of units are much flatter
