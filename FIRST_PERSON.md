@@ -15,6 +15,7 @@ A 3D, first-person view of the unmodified Mindustry simulation. The simulation, 
 
 - Floor, ores and static walls are textured quads / columns.
 - Blocks and units are solid low-poly models fitted automatically from their sprites on a background thread (`mindustry.fp.fit`); until a model is ready, or if the fit is poor, the sprite is drawn flat or as a plain block.
+- Buildings: every building is drawn by the game's own drawing code into a recording batch (`RecordingBatch`); `BuildingRenderer` turns each sprite it drew into a solid model (fitted from the sprite) or a flat quad, stacked in the order the game layered them. That is how every layer and animation of every block (rotors, heat glow, liquid levels, turret heads, conveyor items, lasers) works without per-block code. The models are placeholders; far buildings reuse a recording for a few frames.
 - Turrets: base plus a head that turns. Units: layered parts with the game's own walk and weapon animation.
 - Effects and animated blocks the fitter can't model are drawn by the game in 2D into a top-down texture that is laid over the ground.
 
