@@ -63,7 +63,7 @@ public class FpRenderer implements Disposable{
     private boolean robotFailed, captured;
     private int centreX, centreY, lastMx, lastMy;
     private boolean calibrated;
-    private int tries;
+    private int tries, stuck, lastOx, lastOy;
 
     private final Camera3D cam = new Camera3D();
     private final ModelCache models = new ModelCache();
@@ -155,6 +155,7 @@ public class FpRenderer implements Disposable{
             if(Core.input.keyDown(KeyCode.q)) yaw += turn;
             if(Core.input.keyDown(KeyCode.e)) yaw -= turn;
         }
+        if(OS.env("FP_TEST") != null && OS.env("FP_LOOK") == null) return;
         if(free || robotFailed){
             captured = false;
             if(cursorHidden){
@@ -182,6 +183,16 @@ public class FpRenderer implements Disposable{
                     else{ centreX -= errX; centreY -= errY; }
                 }
             }else{
+                int ox = p.x - centreX, oy = p.y - centreY;
+                //if the pointer sits at the same offset frame after frame, the warp is not working (or the window moved): stop, rather than spin
+                if((ox != 0 || oy != 0) && ox == lastOx && oy == lastOy){
+                    if(++stuck > 20){
+                        robotFailed = true;
+                        Log.warn("First-person mouse look is unavailable (pointer cannot be centred); use Q and E to turn.");
+                        return;
+                    }
+                }else stuck = 0;
+                lastOx = ox; lastOy = oy;
                 yaw -= (p.x - centreX) * lookSensitivity;
                 pitch = Mathf.clamp(pitch - (p.y - centreY) * lookSensitivity, -1.45f, 1.45f);
             }

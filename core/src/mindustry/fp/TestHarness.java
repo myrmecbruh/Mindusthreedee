@@ -66,7 +66,7 @@ public class TestHarness implements ApplicationListener{
         }
         if(best == null) return;
         u.set(best.worldx() - 22f, best.worldy());
-        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.62f;
+        renderer.fp.yaw = 0f; renderer.fp.pitch = OS.env("FP_PITCH") != null ? Strings.parseFloat(OS.env("FP_PITCH")) : -0.62f;
         Log.info("FP_TEST: rock @ at @,@", best.block().name, best.x, best.y);
     }
 
@@ -88,7 +88,7 @@ public class TestHarness implements ApplicationListener{
     private void scene(){
         var u = player.unit();
         if(u == null) return;
-        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.62f;
+        renderer.fp.yaw = 0f; renderer.fp.pitch = OS.env("FP_PITCH") != null ? Strings.parseFloat(OS.env("FP_PITCH")) : -0.62f;
         control.input.block = mindustry.content.Blocks.duo;
         int tx = arc.math.geom.Geometry.d4x(0) + (int)(u.x / tilesize), ty = (int)(u.y / tilesize);
         var team = mindustry.game.Team.sharded;
