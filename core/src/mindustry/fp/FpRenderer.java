@@ -16,6 +16,7 @@ import mindustry.core.*;
 import mindustry.entities.units.*;
 import mindustry.fp.ModelCache.*;
 import mindustry.gen.*;
+import mindustry.graphics.Layer;
 import mindustry.graphics.voxel.*;
 import mindustry.type.*;
 import mindustry.world.*;
@@ -527,15 +528,6 @@ public class FpRenderer implements Disposable{
         for(BuildPlan p : self.plans){
             if(p.block != null && !p.breaking) ghost(p.block, p.x, p.y, p.rotation, true, 0.55f);
         }
-        InputHandler in = control.input;
-        for(BuildPlan p : in.selectPlans){
-            if(p.block != null && !p.breaking) ghost(p.block, p.x, p.y, p.rotation, Build.validPlace(p.block, player.team(), p.x, p.y, p.rotation), 0.6f);
-        }
-        if(in.block != null && in.isPlacing()){
-            Vec2 v = aimPoint;
-            int tx = World.toTile(v.x - in.block.offset), ty = World.toTile(v.y - in.block.offset);
-            ghost(in.block, tx, ty, in.rotation, Build.validPlace(in.block, player.team(), tx, ty, in.rotation), 0.7f);
-        }
     }
 
     private void tintQuad(TextureRegion r, float x, float y, float z, float size, float rot, float color){
@@ -583,6 +575,13 @@ public class FpRenderer implements Disposable{
         Groups.effect.each(e -> {
             if(Math.abs(e.x - px) < fxSpan / 2f + 40f && Math.abs(e.y - py) < fxSpan / 2f + 40f) e.draw();
         });
+        if(!OS.hasProp("fp.nooverlay")){
+            //range circles, placement and breaking previews: the game's own overlays
+            Draw.z(Layer.plans);
+            renderer.overlays.drawBottom();
+            Draw.z(Layer.overlayUI);
+            renderer.overlays.drawTop();
+        }
         Draw.flush();
         Draw.sort(false);
         Draw.reset();
