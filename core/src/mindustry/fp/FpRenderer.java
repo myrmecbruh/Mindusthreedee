@@ -533,16 +533,36 @@ public class FpRenderer implements Disposable{
         TextureRegion region = block.variantRegions != null && block.variantRegions.length > 0 ?
             block.variantRegions[Mathf.randomSeed(tile.pos(), 0, block.variantRegions.length - 1)] : block.region;
         if(region == null || !region.found()) return;
-        float x = tile.worldx(), y = tile.worldy(), h = wallHeight, r = tilesize / 2f;
+        float x = tile.worldx(), y = tile.worldy(), h = wallH(tile.x, tile.y), r = tilesize / 2f;
         quad(region, x, y, h, tilesize, tilesize, 0f);
         float side = sideColor(region);
         for(int d = 0; d < 4; d++){
             Tile n = world.tile(tile.x + Geometry.d4x(d), tile.y + Geometry.d4y(d));
-            if(n != null && n.block().isStatic()) continue;
+            float low = 0f;
+            if(n != null && n.block().isStatic()){
+                low = wallH(n.x, n.y);
+                if(low >= h) continue;     //the taller neighbour draws this face
+            }
             float nx = Geometry.d4x(d), ny = Geometry.d4y(d);
             float ax = x + nx * r - ny * r, ay = y + ny * r + nx * r, bx = x + nx * r + ny * r, by = y + ny * r - nx * r;
-            sideQuad(ax, ay, bx, by, 0f, h, nx, ny, side);
+            sideQuad(ax, ay, bx, by, low, h, nx, ny, side);
         }
+    }
+
+    private static float cellHash(int x, int y){
+        int h = x * 374761393 + y * 668265263;
+        h = (h ^ (h >>> 13)) * 1274126177;
+        return ((h ^ (h >>> 16)) & 0xffff) / 65535f;
+    }
+
+    /** Rock walls rise and fall gently from place to place instead of being a flat slab. */
+    private static float wallH(int tx, int ty){
+        float fx = tx * 0.16f, fy = ty * 0.16f;
+        int ix = (int)Math.floor(fx), iy = (int)Math.floor(fy);
+        float ax = fx - ix, ay = fy - iy;
+        ax = ax * ax * (3f - 2f * ax); ay = ay * ay * (3f - 2f * ay);
+        float n = Mathf.lerp(Mathf.lerp(cellHash(ix, iy), cellHash(ix + 1, iy), ax), Mathf.lerp(cellHash(ix, iy + 1), cellHash(ix + 1, iy + 1), ax), ay);
+        return wallHeight * (0.7f + 0.75f * n) + cellHash(tx, ty) * 1.5f;
     }
 
     /** A plain block: the sprite on top, dark sides. */
