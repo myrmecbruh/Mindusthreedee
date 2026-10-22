@@ -19,7 +19,7 @@ import static mindustry.Vars.*;
 public class TestHarness implements ApplicationListener{
     private final int[] frames;
     private final String out;
-    private boolean sceneDone, rockDone, galleryDone;
+    private boolean sceneDone, rockDone, galleryDone, closeDone;
     private int counter = -1, next = 0;
 
     private TestHarness(int[] frames, String out){
@@ -85,6 +85,21 @@ public class TestHarness implements ApplicationListener{
         }
     }
 
+    /** One unit of the named type, close up, seen from the front and a little above. */
+    private void closeup(){
+        var u = player.unit();
+        var type = mindustry.content.UnitTypes.dagger;
+        for(var f : mindustry.content.UnitTypes.class.getFields()){
+            if(f.getName().equals(OS.env("FP_UNIT"))){
+                try{ type = (mindustry.type.UnitType)f.get(null); }catch(Exception ignored){}
+            }
+        }
+        var e = type.spawn(mindustry.game.Team.sharded, u.x + 22f, u.y);
+        e.rotation = 180f;
+        e.vel.setZero();
+        renderer.fp.yaw = 0f; renderer.fp.pitch = -0.95f;
+    }
+
     private void scene(){
         var u = player.unit();
         if(u == null) return;
@@ -125,6 +140,10 @@ public class TestHarness implements ApplicationListener{
         if(!galleryDone && OS.env("FP_GALLERY") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             galleryDone = true;
             gallery();
+        }
+        if(!closeDone && OS.env("FP_UNIT") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
+            closeDone = true;
+            closeup();
         }
         if(!sceneDone && OS.env("FP_SCENE") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             sceneDone = true;

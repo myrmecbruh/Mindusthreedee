@@ -49,7 +49,38 @@ public class ModelBuilder{
             float t = mode == Mode.grounded ? Math.max(maxHeight * 0.18f, maxHeight * zt[i] / tmax) : Math.min(maxHeight, zt[i]);
             zt[i] = z0 + t;
         }
+        raiseDetails(shapes, zt);
         return mesh(shapes, zb, zt, cx, cy, flatBottom);
+    }
+
+    /** A small shape that sits on a bigger one (a cockpit, a stripe, a lamp) has to rise above it, or it is buried and its colour is lost. */
+    static void raiseDetails(List<Fitter.Shape> shapes, float[] zt){
+        int n = shapes.size();
+        Integer[] order = new Integer[n];
+        float[] area = new float[n];
+        for(int i = 0; i < n; i++){ order[i] = i; area[i] = area(shapes.get(i)); }
+        Arrays.sort(order, (a, b) -> Float.compare(area[b], area[a]));
+        for(int oi = 0; oi < n; oi++){
+            int i = order[oi];
+            float[] c = centre(shapes.get(i));
+            float need = 0;
+            for(int oj = 0; oj < oi; oj++){
+                int j = order[oj];
+                if(area[j] > area[i] * 1.15f && inside(shapes.get(j).poly, c[0], c[1])) need = Math.max(need, zt[j] + 1.2f);
+            }
+            if(need > zt[i]) zt[i] = need;
+        }
+    }
+
+    static boolean inside(float[] p, float x, float y){
+        float sign = 0;
+        for(int i = 0; i < 4; i++){
+            int j = (i + 1) & 3;
+            float cr = (p[j * 2] - p[i * 2]) * (y - p[i * 2 + 1]) - (p[j * 2 + 1] - p[i * 2 + 1]) * (x - p[i * 2]);
+            if(cr == 0) continue;
+            if(sign == 0) sign = Math.signum(cr); else if(Math.signum(cr) != sign) return false;
+        }
+        return true;
     }
 
     static float[] centre(Fitter.Shape s){

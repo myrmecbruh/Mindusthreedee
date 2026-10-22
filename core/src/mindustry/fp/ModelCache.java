@@ -105,6 +105,8 @@ public class ModelCache{
         Result r = f.fit(budget, 6);
         if(r.shapes.isEmpty() || (kind == Kind.grounded && r.coverage < 0.6f)){ slot.poor = true; return null; }
         float maxH = ((x1 - x0 + 1) + (y1 - y0 + 1)) / 2f;
+        //buildings follow the (width + depth) / 2 rule; parts of units are much flatter
+        if(kind == Kind.layer) maxH *= 0.4f;
         return ModelBuilder.build(r.shapes, sym, kind == Kind.grounded ? ModelBuilder.Mode.grounded : ModelBuilder.Mode.layer, w, h, w / 2f, h / 2f, z0, maxH, kind == Kind.grounded);
     }
 }

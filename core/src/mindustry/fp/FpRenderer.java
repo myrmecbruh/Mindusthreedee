@@ -68,6 +68,7 @@ public class FpRenderer implements Disposable{
     private final Camera3D cam = new Camera3D();
     private final ModelCache models = new ModelCache();
     private final RockModels rocks = new RockModels();
+    private final DaggerRecipe dagger = new DaggerRecipe();
     private final ObjectMap<VoxelModel, Mesh> meshes = new ObjectMap<>();
     private final ObjectMap<Texture, FloatSeq> flat = new ObjectMap<>();
     private final Seq<Draw3> queue = new Seq<>();
@@ -680,6 +681,25 @@ public class FpRenderer implements Disposable{
         healthBar(u.x, u.y, (type.flying || u.elevation > 0.01f ? flightAltitude * u.elevation : 0f) + type.hitSize * 0.5f + 5f, Math.max(8f, type.hitSize * 1.3f), u.health / u.maxHealth, u.team.color);
         float z = type.flying || u.elevation > 0.01f ? flightAltitude * u.elevation : 0f;
         float rot = u.rotation - 90f;
+
+        if(type == mindustry.content.UnitTypes.dagger && u instanceof Mechc m){
+            //the hand-tuned model: every part carries its own final height
+            float e = u.elevation, base = m.baseRotation();
+            float ext = Mathf.lerp(m.walkExtend(false), 0f, e);
+            for(int i : Mathf.signs){
+                add(dagger.leg(i < 0), u.x + Angles.trnsx(base, ext * i, 0f), u.y + Angles.trnsy(base, ext * i, 0f), z, (base - 90f + 35f * i * e) * Mathf.degRad);
+            }
+            add(dagger.base(), u.x, u.y, z, (base - 90f) * Mathf.degRad);
+            add(dagger.body(), u.x, u.y, z, rot * Mathf.degRad);
+            for(WeaponMount mount : u.mounts){
+                Weapon w = mount.weapon;
+                float wrot = rot + (w.rotate ? mount.rotation : 0f);
+                float rx = u.x + Angles.trnsx(rot, w.x, w.y) + Angles.trnsx(wrot + 90f, 0f, -mount.recoil);
+                float ry = u.y + Angles.trnsy(rot, w.x, w.y) + Angles.trnsy(wrot + 90f, 0f, -mount.recoil);
+                add(dagger.gun(w.flipSprite), rx, ry, z, wrot * Mathf.degRad);
+            }
+            return;
+        }
 
         if(u instanceof Mechc m){
             float e = u.elevation, base = m.baseRotation();
