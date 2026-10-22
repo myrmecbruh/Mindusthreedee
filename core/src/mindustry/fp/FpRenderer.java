@@ -440,6 +440,8 @@ public class FpRenderer implements Disposable{
                     variants[Mathf.randomSeed(tile.pos(), 0, variants.length - 1)] : floor.region;
                 float dark = world.getDarkness(x, y);
                 if(dark >= 4f) continue;
+                //ground nobody on this team has seen yet stays black
+                if(state.rules.fog && state.rules.staticFog && !fogControl.isDiscovered(player.team(), x, y)) continue;
                 if(fr != null){
                     if(dark > 0f){
                         int g = (int)(255 * (1f - dark / 4f));
@@ -458,6 +460,7 @@ public class FpRenderer implements Disposable{
                     continue;
                 }
                 if(tile.build != null && !tile.isCenter()) continue;
+                if(state.rules.fog && tile.build != null && tile.build.inFogTo(player.team())) continue;
 
                 //blocks that reach out to others (power lasers, bridges) have the game draw their connections onto the ground
                 if(tile.build != null && (block instanceof mindustry.world.blocks.power.PowerNode || block instanceof mindustry.world.blocks.distribution.ItemBridge || block instanceof mindustry.world.blocks.distribution.MassDriver)){
@@ -733,6 +736,7 @@ public class FpRenderer implements Disposable{
     private void collectUnits(Unit self){
         for(Unit u : Groups.unit){
             if(u == self || u.type == null || u.dead) continue;
+            if(state.rules.fog && u.inFogTo(player.team())) continue;
             if(Mathf.dst(u.x, u.y, eye.x, eye.y) > radius * tilesize) continue;
             drawUnit(u);
         }
