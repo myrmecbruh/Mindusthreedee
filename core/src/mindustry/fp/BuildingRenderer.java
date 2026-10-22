@@ -138,6 +138,7 @@ public class BuildingRenderer{
         placed.clear();
         float footprint = build.block.size * Vars.tilesize;
         boolean flatBlock = build.block.underBullets;
+        boolean wall = build.block.group == mindustry.world.meta.BlockGroup.walls;
         int rank = 0, modelsPlaced = 0;
 
         for(RecordingBatch.Sprite s : batch.sprites){
@@ -186,7 +187,9 @@ public class BuildingRenderer{
             //a detail on a big block (a lamp, a rotor hub) stays thin; the big parts get their full thickness
             float thickness = Math.max(0.3f, model.maxHeight * 0.25f);
             //the first solid layer is the body of the block; everything above it is kept thin
-            thickness = Math.min(thickness, modelsPlaced == 0 ? footprint * 0.35f : footprint * 0.16f);
+            thickness = Math.min(thickness, modelsPlaced == 0 ? footprint * (wall ? 0.9f : 0.35f) : footprint * 0.16f);
+            //walls are stretched up to stand about as tall as they are wide
+            if(wall && modelsPlaced == 0) thickness = footprint * 0.8f;
             modelsPlaced++;
             float sz = 0.25f * thickness / Math.max(0.3f, model.maxHeight * 0.25f);
 
