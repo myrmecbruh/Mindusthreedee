@@ -787,7 +787,10 @@ public class FpRenderer implements Disposable{
             part(type.baseRegion, false, u.x, u.y, z, base - 90f, 0f);
             part(type.region, false, u.x, u.y, z + 1.2f, rot, 0f);
         }else{
-            if(type.baseRegion != null && type.baseRegion.found() && u instanceof Tankc) part(type.baseRegion, false, u.x, u.y, z, rot, 0f);
+            if(u instanceof Tankc){
+                part(type.treadRegion, false, u.x, u.y, z, rot, 0f);
+                if(type.baseRegion != null && type.baseRegion.found()) part(type.baseRegion, false, u.x, u.y, z, rot, 0f);
+            }
             part(type.region, false, u.x, u.y, z, rot, 0f);
         }
 
