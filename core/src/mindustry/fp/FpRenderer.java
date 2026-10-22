@@ -635,6 +635,10 @@ public class FpRenderer implements Disposable{
         for(Building b : flatBuilds){
             if(Math.abs(b.x - px) < fxSpan / 2f && Math.abs(b.y - py) < fxSpan / 2f && b.tile != null && b.tile.build == b) b.draw();
         }
+        //bullets as the game draws them (trails, lasers, flames), flat on the ground beneath the billboards
+        Groups.bullet.each(b -> {
+            if(Math.abs(b.x - px) < fxSpan / 2f + 40f && Math.abs(b.y - py) < fxSpan / 2f + 40f) b.draw();
+        });
         Groups.effect.each(e -> {
             if(Math.abs(e.x - px) < fxSpan / 2f + 40f && Math.abs(e.y - py) < fxSpan / 2f + 40f) e.draw();
         });
@@ -664,7 +668,7 @@ public class FpRenderer implements Disposable{
             float size = b.type instanceof mindustry.entities.bullet.BasicBulletType bb ? Math.max(1.2f, Math.min(5f, bb.height * 0.22f)) : 1.6f;
             float z = b.type.collidesGround && !b.type.collidesAir ? 2f : (b.type.collidesAir && !b.type.collidesGround ? flightAltitude : 6f);
             Color c = b.type instanceof mindustry.entities.bullet.BasicBulletType bb2 && bb2.frontColor != null ? bb2.frontColor : Color.white;
-            billboard(b.x, b.y, z, size, rx, ry, c.toFloatBits());
+            glow(b.x, b.y, z, size * 1.6f, rx, ry, c.toFloatBits());
         }
     }
 
@@ -690,6 +694,20 @@ public class FpRenderer implements Disposable{
         float fx = x - rx * half * (1f - frac), fy = y - ry * half * (1f - frac);
         Color c = Tmp.c1.set(Color.scarlet).lerp(Color.valueOf("84f491"), frac);
         rectBoard(fx, fy, z + 0.25f, half * frac, hh, rx, ry, c.toFloatBits());
+    }
+
+    /** A soft glowing orb that always faces the camera. */
+    private void glow(float x, float y, float z, float s, float rx, float ry, float color){
+        TextureRegion r = Core.atlas.find("circle-shadow");
+        if(!r.found()){ billboard(x, y, z, s * 0.6f, rx, ry, color); return; }
+        FloatSeq seq = seqFor(r.texture);
+        for(int k = 0; k < 6; k++){
+            int i = quadOrder[k];
+            seq.add(x + rx * cornerX[i] * s, y + ry * cornerX[i] * s, z + cornerY[i] * s);
+            seq.add(0f, 0f, 1f);
+            seq.add(color);
+            seq.add((i == 0 || i == 3) ? r.u : r.u2, i < 2 ? r.v2 : r.v);
+        }
     }
 
     private void billboard(float x, float y, float z, float s, float rx, float ry, float color){
