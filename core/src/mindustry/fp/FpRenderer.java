@@ -399,6 +399,7 @@ public class FpRenderer implements Disposable{
 
         long t0 = System.nanoTime();
         flat.each((t, seq) -> seq.clear());
+        lastTexture = null;
         queue.clear();
         flatBuilds.clear();
         collectWorld(px, py, unit);
@@ -458,6 +459,10 @@ public class FpRenderer implements Disposable{
                 }
                 if(tile.build != null && !tile.isCenter()) continue;
 
+                //blocks that reach out to others (power lasers, bridges) have the game draw their connections onto the ground
+                if(tile.build != null && (block instanceof mindustry.world.blocks.power.PowerNode || block instanceof mindustry.world.blocks.distribution.ItemBridge || block instanceof mindustry.world.blocks.distribution.MassDriver)){
+                    flatBuilds.addUnique(tile.build);
+                }
                 if(tile.build != null && tile.build.damaged() && tile.build.health > 0f){
                     healthBar(tile.build.x, tile.build.y, block.size * tilesize * 0.6f + 4f, block.size * tilesize, tile.build.health / tile.build.maxHealth, tile.build.team.color);
                 }
@@ -511,7 +516,7 @@ public class FpRenderer implements Disposable{
                     }else{
                         //still being fitted, or a part that turns: draw the sprite flat, and let the game draw the real thing on top
                         quad(region, wx, wy, 0.1f, block.size * tilesize, block.size * tilesize, rot);
-                        if(tile.build != null) flatBuilds.add(tile.build);
+                        if(tile.build != null) flatBuilds.addUnique(tile.build);
                     }
                 }else{
                     add(model, wx, wy, 0f, 0f);
@@ -599,18 +604,7 @@ public class FpRenderer implements Disposable{
     }
 
     private void tintQuad(TextureRegion r, float x, float y, float z, float size, float rot, float color){
-        FloatSeq seq = flat.get(r.texture);
-        if(seq == null) flat.put(r.texture, seq = new FloatSeq());
-        float cos = Mathf.cosDeg(rot), sin = Mathf.sinDeg(rot), h = size / 2f;
-        float[] cxs = {-h, h, h, -h}, cys = {-h, -h, h, h};
-        float[] us = {r.u, r.u2, r.u2, r.u}, vs = {r.v2, r.v2, r.v, r.v};
-        int[] order = {0, 1, 2, 0, 2, 3};
-        for(int i : order){
-            seq.add(x + cxs[i] * cos - cys[i] * sin, y + cxs[i] * sin + cys[i] * cos, z);
-            seq.add(0f, 0f, 1f);
-            seq.add(color);
-            seq.add(us[i], vs[i]);
-        }
+        quadColored(r, x, y, z, size, size, rot, color);
     }
 
     private void crosshair(){
@@ -810,21 +804,36 @@ public class FpRenderer implements Disposable{
         queue.add(d);
     }
 
-    private void quad(TextureRegion r, float x, float y, float z, float w, float h, float rot){
-        FloatSeq seq = flat.get(r.texture);
-        if(seq == null) flat.put(r.texture, seq = new FloatSeq());
+    private static final int[] quadOrder = {0, 1, 2, 0, 2, 3};
+    private static final float[] cornerX = {-1, 1, 1, -1}, cornerY = {-1, -1, 1, 1};
+    private FloatSeq lastSeq;
+    private Texture lastTexture;
 
-        float cos = Mathf.cosDeg(rot), sin = Mathf.sinDeg(rot);
+    private FloatSeq seqFor(Texture t){
+        if(t == lastTexture) return lastSeq;
+        FloatSeq seq = flat.get(t);
+        if(seq == null) flat.put(t, seq = new FloatSeq());
+        lastTexture = t;
+        lastSeq = seq;
+        return seq;
+    }
+
+    private void quad(TextureRegion r, float x, float y, float z, float w, float h, float rot){
+        quadColored(r, x, y, z, w, h, rot, Color.whiteFloatBits);
+    }
+
+    private void quadColored(TextureRegion r, float x, float y, float z, float w, float h, float rot, float color){
+        FloatSeq seq = seqFor(r.texture);
+        float cos = 1f, sin = 0f;
+        if(rot != 0f){ cos = Mathf.cosDeg(rot); sin = Mathf.sinDeg(rot); }
         float hw = w / 2f, hh = h / 2f;
-        float white = Color.whiteFloatBits;
-        float[] cxs = {-hw, hw, hw, -hw}, cys = {-hh, -hh, hh, hh};
-        float[] us = {r.u, r.u2, r.u2, r.u}, vs = {r.v2, r.v2, r.v, r.v};
-        int[] order = {0, 1, 2, 0, 2, 3};
-        for(int i : order){
-            seq.add(x + cxs[i] * cos - cys[i] * sin, y + cxs[i] * sin + cys[i] * cos, z);
+        for(int k = 0; k < 6; k++){
+            int i = quadOrder[k];
+            float cx = cornerX[i] * hw, cy = cornerY[i] * hh;
+            seq.add(x + cx * cos - cy * sin, y + cx * sin + cy * cos, z);
             seq.add(0f, 0f, 1f);
-            seq.add(white);
-            seq.add(us[i], vs[i]);
+            seq.add(color);
+            seq.add((i == 0 || i == 3) ? r.u : r.u2, i < 2 ? r.v2 : r.v);
         }
     }
 

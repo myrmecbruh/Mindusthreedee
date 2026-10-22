@@ -121,6 +121,8 @@ public class TestHarness implements ApplicationListener{
             if(t != null) t.setNet(bs[i], team, 0);
         }
         for(int i = 0; i < 8; i++){ var t = world.tile(tx + 6 + i, ty - 3); if(t != null) t.setNet(mindustry.content.Blocks.conveyor, team, 0); }
+        var n1 = world.tile(tx + 8, ty - 8); var n2 = world.tile(tx + 14, ty - 8);
+        if(n1 != null && n2 != null){ n1.setNet(mindustry.content.Blocks.powerNode, team, 0); n2.setNet(mindustry.content.Blocks.powerNode, team, 0); Time.run(30f, () -> { if(n1.build != null && n2.build != null) n1.build.configureAny(n2.pos()); }); }
     }
 
     @Override
