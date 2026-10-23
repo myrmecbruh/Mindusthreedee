@@ -123,6 +123,70 @@ public class TestHarness implements ApplicationListener{
         renderer.fp.yaw = 0f; renderer.fp.pitch = -1.45f;
     }
 
+    private mindustry.type.UnitType[] showList;
+    private mindustry.gen.Unit shown;
+    private int showStart = -1;
+    private float waterX, waterY, landX, landY;
+
+    /** One unit type at a time, close up from the same side, each saved as its own screenshot: FP_UNITSHOW=1 (optionally FP_SHOWFROM / FP_SHOWCOUNT). */
+    private void unitShow(){
+        var u = player.unit();
+        if(showList == null){
+            var all = new arc.struct.Seq<mindustry.type.UnitType>();
+            for(var t : content.units()) if(!t.internal && !t.isHidden() && t != mindustry.content.UnitTypes.alpha) all.add(t);
+            int from = Strings.parseInt(OS.env("FP_SHOWFROM") == null ? "0" : OS.env("FP_SHOWFROM"), 0), count = Strings.parseInt(OS.env("FP_SHOWCOUNT") == null ? "12" : OS.env("FP_SHOWCOUNT"), 12);
+            showList = new mindustry.type.UnitType[Math.max(0, Math.min(count, all.size - from))];
+            for(int i = 0; i < showList.length; i++) showList[i] = all.get(from + i);
+            //somewhere open: a clear patch of ground, the nearest to the player
+            float bx = u.x, by = u.y, bd = 1e9f;
+            for(int x = 12; x < world.width() - 12; x += 3) for(int y = 12; y < world.height() - 12; y += 3){
+                boolean clear = true;
+                for(int dx = -9; dx <= 9 && clear; dx += 3) for(int dy = -9; dy <= 9 && clear; dy += 3){
+                    var t = world.tile(x + dx, y + dy);
+                    clear = t != null && !t.solid() && !t.floor().isLiquid && t.build == null;
+                }
+                float d = arc.math.Mathf.dst(x * tilesize, y * tilesize, u.x, u.y);
+                if(clear && d > 40f && d < bd){ bd = d; bx = x * tilesize; by = y * tilesize; }
+            }
+            //and, for the boats, a pond
+            float wx = bx, wy = by, wd = 1e9f;
+            for(int x = 6; x < world.width() - 6; x += 2) for(int y = 6; y < world.height() - 6; y += 2){
+                boolean water = true;
+                for(int dx = -5; dx <= 5 && water; dx += 5) for(int dy = -5; dy <= 5 && water; dy += 5){
+                    var t = world.tile(x + dx, y + dy);
+                    water = t != null && t.floor().isLiquid && !t.solid();
+                }
+                float d = arc.math.Mathf.dst(x * tilesize, y * tilesize, u.x, u.y);
+                if(water && d < wd){ wd = d; wx = x * tilesize; wy = y * tilesize; }
+            }
+            waterX = wx; waterY = wy; landX = bx; landY = by;
+            u.set(bx, by);
+            showStart = counter;
+            Log.info("FP_TEST: showing @ units from @: @", showList.length, from, arc.struct.Seq.with(showList).map(t -> t.name));
+        }
+        int k = (counter - showStart) / 100, phase = (counter - showStart) % 100;
+        if(k >= showList.length){ Core.app.post(() -> Core.app.exit()); return; }
+        var type = showList[k];
+        if(phase == 0){
+            if(shown != null) shown.remove();
+            boolean boat = type.naval;
+            u.set(boat ? waterX - 14f - type.hitSize * 1.4f : landX, boat ? waterY : landY);
+            shown = type.spawn(mindustry.game.Team.sharded, u.x + 14f + type.hitSize * 1.4f, u.y);
+            shown.controller(new mindustry.entities.units.AIController(){ @Override public void updateMovement(){} @Override public void updateTargeting(){} });
+            shown.rotation = 180f;
+            renderer.fp.chaseDistance = 12f + type.hitSize * 1.6f;
+            renderer.fp.yaw = 0f; renderer.fp.pitch = type.flying ? -0.12f : -0.7f;
+        }
+        if(shown != null && !shown.dead){ shown.vel.setZero(); }
+        if(phase == 80){
+            Pixmap pix = ScreenUtils.getFrameBufferPixmap(0, 0, Core.graphics.getBackBufferWidth(), Core.graphics.getBackBufferHeight(), true);
+            Fi file = new Fi(out + "_" + String.format("%02d", Strings.parseInt(OS.env("FP_SHOWFROM") == null ? "0" : OS.env("FP_SHOWFROM"), 0) + k) + "_" + type.name + ".png");
+            PixmapIO.writePng(file, pix);
+            pix.dispose();
+            Log.info("FP_TEST: unit @ -> @ (added @ dead @ at @,@ player @,@ yaw @ pitch @ chase @)", type.name, file.name(), shown != null && shown.isAdded(), shown != null && shown.dead, shown == null ? 0 : (int)shown.x, shown == null ? 0 : (int)shown.y, (int)u.x, (int)u.y, renderer.fp.yaw, renderer.fp.pitch, renderer.fp.chase);
+        }
+    }
+
     private void scene(){
         var u = player.unit();
         if(u == null) return;
@@ -166,6 +230,9 @@ public class TestHarness implements ApplicationListener{
         if(!galleryDone && OS.env("FP_GALLERY") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             galleryDone = true;
             gallery();
+        }
+        if(OS.env("FP_UNITSHOW") != null && counter > 60 && player.unit() != null && !player.dead() && player.unit().type != null){
+            unitShow();
         }
         if(!closeDone && OS.env("FP_UNIT") != null && counter > 30 && player.unit() != null && !player.dead() && player.unit().type != null){
             closeDone = true;

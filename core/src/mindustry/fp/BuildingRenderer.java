@@ -50,19 +50,24 @@ public class BuildingRenderer{
         }
     }
 
-    private final IntMap<Cache> caches = new IntMap<>();
+    private final IntMap<Cache> caches = new IntMap<>(), unitCaches = new IntMap<>();
     private int frame;
     private Cache cache;
+    private boolean unitMode;
+    private final boolean debug = OS.env("FP_DEBUGSPRITES") != null;
+    private int debugged;
 
     /** Call once per frame before drawing any buildings. */
     public void beginFrame(){
         frame++;
         if(frame % 600 == 0){
             //forget buildings that have not been drawn for a while
-            var it = caches.entries();
-            while(it.hasNext()){
-                var e = it.next();
-                if(frame - e.value.refreshed > 300) it.remove();
+            for(var map : new IntMap[]{caches, unitCaches}){
+                var it = map.entries();
+                while(it.hasNext()){
+                    var e = (IntMap.Entry<Cache>)it.next();
+                    if(frame - e.value.refreshed > 300) it.remove();
+                }
             }
         }
     }
@@ -99,35 +104,56 @@ public class BuildingRenderer{
      * @param interval how many frames a recording may be reused for (1 = record every frame)
      */
     public boolean draw(Building build, int interval){
+        return drawCached(caches, build.id, interval, 0f, build::draw, build.block.size * Vars.tilesize, build.block.underBullets, build.block.group == mindustry.world.meta.BlockGroup.walls);
+    }
+
+    /** The same for a unit: whatever the game draws for it (legs, body, weapons, engines, cells), stacked. */
+    public boolean drawUnit(Unit u, int interval, float z){
+        unitMode = true;
+        try{
+            return drawCached(unitCaches, u.id, interval, z, u::draw, Math.max(6f, u.hitSize * 1.1f), false, false);
+        }finally{
+            unitMode = false;
+        }
+    }
+
+    private boolean drawCached(IntMap<Cache> map, int id, int interval, float zOff, Runnable drawer, float footprint, boolean flatBlock, boolean wall){
         if(!indexed) index();
 
-        Cache c = caches.get(build.id);
-        if(c == null) caches.put(build.id, c = new Cache());
-        boolean due = interval <= 1 || c.refreshed == 0 || (frame + build.id) % interval == 0 || frame - c.refreshed >= interval;
+        Cache c = map.get(id);
+        if(c == null) map.put(id, c = new Cache());
+        boolean due = interval <= 1 || c.refreshed == 0 || (frame + id) % interval == 0 || frame - c.refreshed >= interval;
         if(due){
             c.clear();
             cache = c;
-            c.empty = !record(build);
+            c.empty = !record(drawer, footprint, flatBlock, wall);
             cache = null;
             c.refreshed = frame;
         }
         if(c.empty) return false;
         for(int i = 0; i < c.used; i++){
             FloatSeq out = (c.glowing.get(i) ? glow : solid).get(c.textures.get(i));
-            out.addAll(c.data.get(i));
+            FloatSeq src = c.data.get(i);
+            if(zOff == 0f){
+                out.addAll(src);
+            }else{
+                int start = out.size;
+                out.addAll(src);
+                for(int k = start + 2; k < out.size; k += 9) out.items[k] += zOff;
+            }
         }
         return true;
     }
 
-    private boolean record(Building build){
+    private boolean record(Runnable drawer, float footprint, boolean flatBlock, boolean wall){
 
         batch.begin();
         Batch previous = Core.batch;
         Core.batch = batch;
         try{
-            build.draw();
+            drawer.run();
         }catch(Throwable t){
-            //one building's drawing bug must not take the frame down
+            //one thing's drawing bug must not take the frame down
         }finally{
             Core.batch = previous;
             Draw.reset();
@@ -136,10 +162,13 @@ public class BuildingRenderer{
 
         batch.sprites.sort((a, b) -> a.z != b.z ? Float.compare(a.z, b.z) : a.order - b.order);
         placed.clear();
-        float footprint = build.block.size * Vars.tilesize;
-        boolean flatBlock = build.block.underBullets;
-        boolean wall = build.block.group == mindustry.world.meta.BlockGroup.walls;
         int rank = 0, modelsPlaced = 0;
+        if(debug && unitMode && debugged++ < 1){
+            for(RecordingBatch.Sprite s : batch.sprites){
+                AtlasRegion r = byUv.get(key(s.texture, s.u[0], s.v[0], s.u[2], s.v[2]));
+                Log.info("FP_TEST: sprite z=@ @ w=@ h=@ alpha=@ add=@ at @,@", s.z, r == null ? "?" : r.name, Mathf.len(s.x[3] - s.x[0], s.y[3] - s.y[0]), Mathf.len(s.x[1] - s.x[0], s.y[1] - s.y[0]), (Float.floatToRawIntBits(s.color) >>> 24), s.additive, (int)s.x[0], (int)s.y[0]);
+            }
+        }
 
         for(RecordingBatch.Sprite s : batch.sprites){
             int bits = Float.floatToRawIntBits(s.color);
@@ -161,10 +190,23 @@ public class BuildingRenderer{
 
             AtlasRegion region = byUv.get(key(s.texture, s.u[0], s.v[0], s.u[2], s.v[2]));
             boolean translucent = ca < 242 || s.additive;
-            boolean isWhite = region == null || region == Core.atlas.white() || (region.name != null && region.name.equals("white"));
+            boolean isWhite = region == null || region == Core.atlas.white() || (region.name != null && (region.name.equals("white") || region.name.equals("circle") || region.name.equals("particle") || region.name.contains("shadow") || region.name.contains("light") || region.name.equals("square") || region.name.equals("circle-mid")));
+
+            //dark silhouettes drawn behind a sprite would only double its thickness
+            if(region != null && region.name != null && region.name.endsWith("-outline")) continue;
 
             float top = stackTop(cx, cy, radius);
+            if(unitMode) top = Math.min(top, footprint * 0.45f);
+            boolean legPart = unitMode && region != null && region.name != null && (region.name.contains("leg") || region.name.contains("foot") || region.name.contains("joint"));
+            //a big flat fill (a force field, a range circle) is a faint sheet, not a slab
+            boolean bigFill = isWhite && w * h > footprint * footprint * 1.3f;
 
+            if(bigFill){
+                float faint = Color.toFloatBits(cr, cg, cb, Math.min(ca, 70));
+                emitQuad(cache.slot(s.texture, true), s, top + 0.15f + rank * 0.01f, faint);
+                rank++;
+                continue;
+            }
             if(translucent){
                 emitQuad(cache.slot(s.texture, true), s, top + 0.12f + rank * 0.01f, tint);
                 rank++;
@@ -184,9 +226,23 @@ public class BuildingRenderer{
                 continue;
             }
 
+            if(legPart){
+                float t = Math.min(Math.max(0.3f, model.maxHeight * 0.25f), footprint * 0.1f);
+                float legSz = 0.25f * t / Math.max(0.3f, model.maxHeight * 0.25f);
+                boolean fx = (s.u[3] - s.u[0]) * (region.u2 - region.u) < 0f, fy = (s.v[1] - s.v[0]) * (region.v - region.v2) < 0f;
+                float lrx = fx ? -rx : rx, lry = fx ? -ry : ry, lux = fy ? -ux : ux, luy = fy ? -uy : uy;
+                float th = Mathf.atan2(lry, lrx), cs = Mathf.cos(th), sn = Mathf.sin(th);
+                float lsy = (lux * -sn + luy * cs >= 0f ? 1f : -1f) * h / Math.max(1f, region.height);
+                emitModel(cache.slot(whiteTexture, false), model, cx, cy, 0.3f + rank * 0.02f, cs, sn, w / Math.max(1f, region.width), lsy, legSz, tint);
+                rank++;
+                continue;
+            }
+
             //a detail on a big block (a lamp, a rotor hub) stays thin; the big parts get their full thickness
             float thickness = Math.max(0.3f, model.maxHeight * 0.25f);
             //the first solid layer is the body of the block; everything above it is kept thin
+            //nothing is much taller than it is wide
+            thickness = Math.min(thickness, Math.max(w, h) * 0.6f);
             thickness = Math.min(thickness, modelsPlaced == 0 ? footprint * (wall ? 0.9f : 0.35f) : footprint * 0.16f);
             //walls are stretched up to stand about as tall as they are wide
             if(wall && modelsPlaced == 0) thickness = footprint * 0.8f;

@@ -82,6 +82,7 @@ public class FpRenderer implements Disposable{
     private final Seq<Building> flatBuilds = new Seq<>();
     private BuildingRenderer buildings;
     private final ObjectMap<Texture, FloatSeq> glowFlat = new ObjectMap<>();
+    private final boolean legacyUnits = OS.hasProp("fp.legacyunits");
     private final boolean legacyBuildings = OS.hasProp("fp.legacybuildings");
     private boolean fxActive;
     private int failures;
@@ -827,6 +828,13 @@ public class FpRenderer implements Disposable{
                 add(dagger.gun(w.flipSprite), rx, ry, z, wrot * Mathf.degRad);
             }
             return;
+        }
+
+        //everything else: whatever the game draws for the unit, layer by layer, animation and all
+        if(!legacyUnits){
+            float tiles = Mathf.dst(u.x, u.y, eye.x, eye.y) / tilesize;
+            int interval = tiles < 25f ? 1 : tiles < 60f ? 2 : 4;
+            if(buildings.drawUnit(u, interval, z)) return;
         }
 
         if(u instanceof Mechc m){
